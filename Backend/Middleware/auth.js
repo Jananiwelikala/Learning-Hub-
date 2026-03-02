@@ -1,20 +1,25 @@
 const jwt = require("jsonwebtoken");
 
+// Validates Bearer token and attaches decoded user payload to req.user.
 function authMiddleware(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-
-
-  if (!token) {
-    return res.status(401).json({ message: "No token, access denied" });
-  }
-
   try {
+    // Accept: "Authorization: Bearer <token>"
+    const authHeader = req.headers.authorization || "";
+    const parts = authHeader.split(" ");
+
+    if (parts.length !== 2 || parts[0] !== "Bearer") {
+      return res.status(401).json({ message: "No token, access denied" });
+    }
+
+    const token = parts[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id, role }
+
+    // decoded should contain { id, role } from your login token
+    req.user = decoded;
     next();
   } catch (error) {
     return res.status(401).json({ message: "Invalid token" });
   }
 }
 
-module.exports = authMiddleware; // ✅ MUST be this only
+module.exports = authMiddleware;

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+// User accounts for students, teachers, and admins.
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },

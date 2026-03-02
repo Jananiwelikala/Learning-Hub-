@@ -1,74 +1,50 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+require("dotenv").config();
+const lessonRoutes = require("./routes/lessonRotes");
 
-// ✅ Import User model
 const User = require("./models/User");
-
-// ✅ Debug: check if User is a real mongoose model (should be a function)
-console.log("User import type:", typeof User);
-console.log("User keys:", User && typeof User === "object" ? Object.keys(User) : "N/A");
-
 const auth = require("./Middleware/auth");
 const roleMiddleware = require("./Middleware/roleMiddleware");
 
-// Import Express framework (used to create the server)
-const express = require("express");
+const streamRoutes = require("./routes/streamRoutes");
+const subjectRoutes = require("./routes/subjectRoutes");
 
-// Import Mongoose (used to connect and talk to MongoDB)
-const mongoose = require("mongoose");
-
-// Import CORS (allows frontend to talk to backend)
-const cors = require("cors");
-
-// Load environment variables from .env file
-require("dotenv").config();
-
-// Create an Express application
 const app = express();
 
-/* ======================
-   MIDDLEWARE SECTION
-   ====================== */
+// Global middleware for CORS and JSON request bodies.
 app.use(cors());
 app.use(express.json());
 
-/* ======================
-   DATABASE CONNECTION
-   ====================== */
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+// Feature routes (auth checks are handled inside each route file where needed).
+app.use("/api/streams", streamRoutes);
+app.use("/api/subjects", subjectRoutes);
+app.use("/api/lessons", lessonRoutes);
 
-/* ======================
-   ROUTES
-   ====================== */
+// Quick health endpoint for uptime checks.
+app.get("/health", (req, res) => res.send("OK"));
 
-// health check
-app.get("/health", (req, res) => {
-  res.send("OK");
-});
-
-// REGISTER
+// Register a new user.
 app.post("/api/register", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
-    const existingUser = await User.findOne({ email }); // <-- your error happens here if User is wrong
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
+    // Prevent duplicate accounts by email.
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
 
+    // Store only hashed passwords.
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
+    await User.create({
       name,
       email,
       password: hashedPassword,
-      role,
+      role, // admin/teacher/student (based on your enum)
     });
-
-    await user.save();
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
@@ -76,17 +52,19 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// LOGIN
+// Login and issue a signed JWT token.
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validate user existence and password.
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
+    // Include minimal identity data in token payload.
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -99,16 +77,19 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Admin-only route
+// Example protected route: only admins can access this.
 app.get("/api/admin", auth, roleMiddleware("admin"), (req, res) => {
   res.json({ message: "Welcome admin" });
 });
 
-/* ======================
-   SERVER START
-   ====================== */
+// Start server only after DB connection succeeds.
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB connected");
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((err) => console.error("MongoDB connection error:", err));
+

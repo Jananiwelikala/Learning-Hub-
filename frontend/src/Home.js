@@ -1,10 +1,11 @@
-function Home() {
+function Home({ token, onLoginClick, onLogout }) {
   return (
     <div className="home">
+      {/* Top navigation */}
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">AL</span>
-          <span className="brand-name">AL Learning</span>
+          <span className="brand-name">Learning Hub</span>
         </div>
 
         <nav className="nav">
@@ -13,16 +14,30 @@ function Home() {
           <a href="#about">About Us</a>
         </nav>
 
+        {/* Auth actions change by login state */}
         <div className="nav-actions">
-          <button className="btn ghost">Login</button>
-          <button className="btn solid">Register</button>
+          {token ? (
+            <button className="btn outline" onClick={onLogout}>
+              Logout
+            </button>
+          ) : (
+            <>
+              <button className="btn ghost" onClick={onLoginClick}>
+                Login
+              </button>
+              <button className="btn solid" onClick={onLoginClick}>
+                Register
+              </button>
+            </>
+          )}
         </div>
       </header>
 
       <main>
+        {/* Hero section */}
         <section id="home" className="hero">
           <div className="hero-left">
-            <span className="pill">AI-Powered Learning Platform</span>
+            <span className="pill">Learning Hub for AL students</span>
             <h1>
               Make <span>AL Learning</span>
               <br />
@@ -38,32 +53,19 @@ function Home() {
               <button className="btn solid">Get Started Now</button>
               <button className="btn outline">Try AI Chatbot</button>
             </div>
-            <div className="stats">
-              <div>
-                <strong>5000+</strong>
-                <span>Students</span>
-              </div>
-              <div>
-                <strong>500+</strong>
-                <span>Past Papers</span>
-              </div>
-              <div>
-                <strong>95%</strong>
-                <span>Success Rate</span>
-              </div>
+            
             </div>
-          </div>
+          
 
           <div className="hero-right">
+            {/* Dashboard illustration image */}
             <div className="image-card">
-              <img
-                src="https://images.unsplash.com/photo-1588072432836-80acdfdcd39f?q=80&w=1200&auto=format&fit=crop"
-                alt="Students learning"
-              />
+              <img src="/dashboard-image.png" alt="Students learning" />
             </div>
           </div>
         </section>
 
+        {/* Product feature cards */}
         <section className="section key-features">
           <div className="section-header">
             <h2>Key Features</h2>
@@ -115,6 +117,7 @@ function Home() {
           </div>
         </section>
 
+        {/* 3-step usage flow */}
         <section className="section how-it-works">
           <div className="section-header">
             <h2>How It Works</h2>
@@ -157,6 +160,7 @@ function Home() {
           </div>
         </section>
 
+        {/* Stream and subject overview */}
         <section id="subjects" className="section streams">
           <div className="section-header">
             <h2>Streams &amp; Subjects</h2>
@@ -206,6 +210,7 @@ function Home() {
           </div>
         </section>
 
+        {/* Short project introduction */}
         <section id="about" className="section">
           <h2>About Us</h2>
           <p>
@@ -214,6 +219,7 @@ function Home() {
           </p>
         </section>
 
+        {/* Final call-to-action */}
         <section className="cta">
           <div className="cta-content">
             <h2>Start Your AL Success Journey Today</h2>
@@ -228,6 +234,7 @@ function Home() {
           </div>
         </section>
 
+        {/* Footer links and contact */}
         <footer className="site-footer">
           <div className="footer-grid">
             <div>
