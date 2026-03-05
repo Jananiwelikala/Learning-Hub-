@@ -18,6 +18,12 @@ const mcqSchema = new mongoose.Schema(
       },
     },
     correctOptionIndex: { type: Number, required: true, min: 0 },
+    examYear: { type: Number, default: 2024 },
+    sourceLabel: {
+      type: String,
+      default: "A/L Past Paper 2024",
+      trim: true,
+    },
   },
   { timestamps: true }
 );

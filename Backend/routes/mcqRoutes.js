@@ -2,6 +2,7 @@ const express = require("express");
 const auth = require("../Middleware/auth");
 const roleMiddleware = require("../Middleware/roleMiddleware");
 const MCQ = require("../models/MCQ");
+const AssessmentAttempt = require("../models/AssessmentAttempt");
 
 const router = express.Router();
 
@@ -61,7 +62,25 @@ router.post("/submit", auth, roleMiddleware(["student", "teacher", "admin"]), as
         ? 0
         : Math.round((correctAnswers / totalQuestions) * 100);
 
+    const storedAttempt = await AssessmentAttempt.create({
+      student: req.user.id,
+      lesson: lessonId,
+      questionType: "mcq",
+      examYear: 2024,
+      mcqAttempt: {
+        answers: results.map((item) => ({
+          mcqId: item.mcqId,
+          selectedOptionIndex: item.selectedOptionIndex,
+          isCorrect: item.isCorrect,
+        })),
+        totalQuestions,
+        correctAnswers,
+        scorePercent,
+      },
+    });
+
     res.json({
+      attemptId: storedAttempt._id,
       lessonId,
       totalQuestions,
       correctAnswers,

@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const lessonRoutes = require("./routes/lessonRotes");
 const mcqRoutes = require("./routes/mcqRoutes");
+const assessmentRoutes = require("./routes/assessmentRoutes");
 const seedSampleData = require("./seedSampleData");
 
 const User = require("./models/User");
@@ -27,6 +28,7 @@ app.use("/api/streams", streamRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/mcqs", mcqRoutes);
+app.use("/api/assessments", assessmentRoutes);
 
 // Quick health endpoint for uptime checks.
 app.get("/health", (req, res) => res.send("OK"));
