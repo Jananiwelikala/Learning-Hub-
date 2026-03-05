@@ -1,4 +1,8 @@
-function Home({ token, onLoginClick, onLogout }) {
+import { useState } from "react";
+
+function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogout }) {
+  const [activeNav, setActiveNav] = useState("home");
+
   return (
     <div className="home">
       {/* Top navigation */}
@@ -9,9 +13,31 @@ function Home({ token, onLoginClick, onLogout }) {
         </div>
 
         <nav className="nav">
-          <a href="#home">Home</a>
-          <a href="#subjects">Subjects</a>
-          <a href="#about">About Us</a>
+          <a
+            href="#home"
+            className={activeNav === "home" ? "active" : ""}
+            onClick={() => setActiveNav("home")}
+          >
+            Home
+          </a>
+          <a
+            href="#subjects"
+            className={activeNav === "subjects" ? "active" : ""}
+            onClick={(event) => {
+              event.preventDefault();
+              setActiveNav("subjects");
+              onViewAllSubjects();
+            }}
+          >
+            Subjects
+          </a>
+          <a
+            href="#about"
+            className={activeNav === "about" ? "active" : ""}
+            onClick={() => setActiveNav("about")}
+          >
+            About Us
+          </a>
         </nav>
 
         {/* Auth actions change by login state */}
@@ -25,7 +51,7 @@ function Home({ token, onLoginClick, onLogout }) {
               <button className="btn ghost" onClick={onLoginClick}>
                 Login
               </button>
-              <button className="btn solid" onClick={onLoginClick}>
+              <button className="btn solid" onClick={onRegisterClick}>
                 Register
               </button>
             </>
@@ -50,7 +76,7 @@ function Home({ token, onLoginClick, onLogout }) {
             </p>
             <p className="accent-line">AI මගින් AL ඉගෙනීම දැන් පහසුයි!</p>
             <div className="hero-actions">
-              <button className="btn solid">Get Started Now</button>
+              <button className="btn solid" onClick={onRegisterClick}>Get Started Now</button>
               <button className="btn outline">Try AI Chatbot</button>
             </div>
             
@@ -206,7 +232,9 @@ function Home({ token, onLoginClick, onLogout }) {
           </div>
 
           <div className="center-cta">
-            <button className="btn solid">View All Subjects →</button>
+            <button className="btn solid" onClick={onViewAllSubjects}>
+              View All Subjects
+            </button>
           </div>
         </section>
 
@@ -290,3 +318,5 @@ function Home({ token, onLoginClick, onLogout }) {
 }
 
 export default Home;
+
+

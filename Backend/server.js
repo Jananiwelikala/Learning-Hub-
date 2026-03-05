@@ -5,6 +5,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const lessonRoutes = require("./routes/lessonRotes");
+const mcqRoutes = require("./routes/mcqRoutes");
+const seedSampleData = require("./seedSampleData");
 
 const User = require("./models/User");
 const auth = require("./Middleware/auth");
@@ -14,6 +16,7 @@ const streamRoutes = require("./routes/streamRoutes");
 const subjectRoutes = require("./routes/subjectRoutes");
 
 const app = express();
+const PUBLIC_REGISTER_ROLES = ["student", "teacher"];
 
 // Global middleware for CORS and JSON request bodies.
 app.use(cors());
@@ -23,6 +26,7 @@ app.use(express.json());
 app.use("/api/streams", streamRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/lessons", lessonRoutes);
+app.use("/api/mcqs", mcqRoutes);
 
 // Quick health endpoint for uptime checks.
 app.get("/health", (req, res) => res.send("OK"));
@@ -31,19 +35,37 @@ app.get("/health", (req, res) => res.send("OK"));
 app.post("/api/register", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedName = String(name || "").trim();
+    const selectedRole = String(role || "student").trim().toLowerCase();
+
+    if (!normalizedName || !normalizedEmail || !password) {
+      return res.status(400).json({ message: "Name, email and password are required" });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters" });
+    }
+
+    // Public signup is limited to student/teacher roles.
+    if (!PUBLIC_REGISTER_ROLES.includes(selectedRole)) {
+      return res.status(403).json({
+        message: "Invalid role for public registration",
+      });
+    }
 
     // Prevent duplicate accounts by email.
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) return res.status(400).json({ message: "User already exists" });
 
     // Store only hashed passwords.
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await User.create({
-      name,
-      email,
+      name: normalizedName,
+      email: normalizedEmail,
       password: hashedPassword,
-      role, // admin/teacher/student (based on your enum)
+      role: selectedRole,
     });
 
     res.status(201).json({ message: "User registered successfully" });
@@ -56,9 +78,14 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
 
     // Validate user existence and password.
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -71,15 +98,83 @@ app.post("/api/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({ token });
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Example protected route: only admins can access this.
+// Current authenticated user profile.
+app.get("/api/me", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Role-restricted examples.
 app.get("/api/admin", auth, roleMiddleware("admin"), (req, res) => {
-  res.json({ message: "Welcome admin" });
+  res.json({ message: "Welcome admin", role: req.user.role });
+});
+
+app.get("/api/teacher", auth, roleMiddleware("teacher"), (req, res) => {
+  res.json({ message: "Welcome teacher", role: req.user.role });
+});
+
+app.get("/api/student", auth, roleMiddleware("student"), (req, res) => {
+  res.json({ message: "Welcome student", role: req.user.role });
+});
+
+// Admin-only user management with explicit role assignment.
+app.post("/api/admin/users", auth, roleMiddleware("admin"), async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedName = String(name || "").trim();
+    const selectedRole = String(role || "").trim().toLowerCase();
+    const allowedRoles = ["student", "teacher", "admin"];
+
+    if (!normalizedName || !normalizedEmail || !password || !selectedRole) {
+      return res.status(400).json({ message: "Name, email, password and role are required" });
+    }
+
+    if (!allowedRoles.includes(selectedRole)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters" });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const created = await User.create({
+      name: normalizedName,
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: selectedRole,
+    });
+
+    res.status(201).json({
+      message: "User created successfully",
+      user: { id: created._id, name: created.name, email: created.email, role: created.role },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 // Start server only after DB connection succeeds.
@@ -87,8 +182,10 @@ const PORT = process.env.PORT || 5000;
 
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log("MongoDB connected");
+    await seedSampleData();
+    console.log("Sample learning data is ready");
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => console.error("MongoDB connection error:", err));

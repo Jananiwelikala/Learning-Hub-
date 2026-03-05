@@ -15,6 +15,9 @@ const lessonSchema = new mongoose.Schema(
     // These are the "locked" resources
     videoLink: { type: String, trim: true },
     notesUrl: { type: String, trim: true },
+    pastPaperMcqUrl: { type: String, trim: true },
+    pastPaperStructuredUrl: { type: String, trim: true },
+    pastPaperEssayUrl: { type: String, trim: true },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

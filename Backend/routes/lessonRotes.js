@@ -1,6 +1,7 @@
 const express = require("express");
 const Lesson = require("../models/Lesson");
 const auth = require("../Middleware/auth");
+const roleMiddleware = require("../Middleware/roleMiddleware");
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.get("/", async (req, res) => {
  * GET /api/lessons/:id
  * Returns FULL lesson (includes videoLink + notesUrl)
  */
-router.get("/:id", auth, async (req, res) => {
+router.get("/:id", auth, roleMiddleware(["student", "teacher", "admin"]), async (req, res) => {
   try {
     const lesson = await Lesson.findById(req.params.id).populate(
       "subject",

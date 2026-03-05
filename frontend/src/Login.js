@@ -2,7 +2,7 @@ import { useState } from "react";
 import { login } from "./api";
 
 // Styled login screen matching the dashboard theme.
-function Login({ onLogin, onClose }) {
+function Login({ onLogin, onClose, onSwitchRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -44,7 +44,7 @@ function Login({ onLogin, onClose }) {
         <div className="login-layout">
           <div className="login-headline">
             <h1>Welcome Back!</h1>
-            <p>ආයුබෝවන්! Sign in to continue learning</p>
+            <p>Sign in to continue learning</p>
           </div>
 
           <section className="login-card">
@@ -67,12 +67,12 @@ function Login({ onLogin, onClose }) {
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
-              <label htmlFor="login-email">Email or Phone Number</label>
+              <label htmlFor="login-email">Email Address</label>
               <div className="input-wrap">
                 <input
                   id="login-email"
                   type="email"
-                  placeholder="Enter email or phone number"
+                  placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -115,7 +115,10 @@ function Login({ onLogin, onClose }) {
               </div>
 
               <p className="register-hint">
-                Don&apos;t have an account? <button type="button">Register Now</button>
+                Don&apos;t have an account?{" "}
+                <button type="button" onClick={onSwitchRegister}>
+                  Register Now
+                </button>
               </p>
             </form>
 

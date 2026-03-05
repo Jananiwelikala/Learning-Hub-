@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 // Validates Bearer token and attaches decoded user payload to req.user.
 function authMiddleware(req, res, next) {
   try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: "JWT secret is not configured" });
+    }
+
     // Accept: "Authorization: Bearer <token>"
     const authHeader = req.headers.authorization || "";
     const parts = authHeader.split(" ");
