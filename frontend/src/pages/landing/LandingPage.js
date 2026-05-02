@@ -1,46 +1,62 @@
 import { useState } from "react";
+import './LandingPage.css';
 
-function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogout }) {
+function Home({
+  token,
+  onBackHome,
+  onLoginClick,
+  onRegisterClick,
+  onViewAllSubjects,
+  onAboutClick,
+  onLogout
+}) {
   const [activeNav, setActiveNav] = useState("home");
 
   return (
     <div className="home">
-      {/* Top navigation */}
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">AL</span>
+          <span className="brand-mark brand-logo-shell">
+            <img src="/logo.png" alt="Learning Hub logo" className="brand-logo-image" />
+          </span>
           <span className="brand-name">Learning Hub</span>
         </div>
 
         <nav className="nav">
-          <a
-            href="#home"
+          <button
+            type="button"
             className={activeNav === "home" ? "active" : ""}
-            onClick={() => setActiveNav("home")}
+            onClick={() => {
+              setActiveNav("home");
+              onBackHome();
+            }}
           >
             Home
-          </a>
-          <a
-            href="#subjects"
+          </button>
+
+          <button
+            type="button"
             className={activeNav === "subjects" ? "active" : ""}
-            onClick={(event) => {
-              event.preventDefault();
+            onClick={() => {
               setActiveNav("subjects");
               onViewAllSubjects();
             }}
           >
             Subjects
-          </a>
-          <a
-            href="#about"
+          </button>
+
+          <button
+            type="button"
             className={activeNav === "about" ? "active" : ""}
-            onClick={() => setActiveNav("about")}
+            onClick={() => {
+              setActiveNav("about");
+              onAboutClick();
+            }}
           >
             About Us
-          </a>
+          </button>
         </nav>
 
-        {/* Auth actions change by login state */}
         <div className="nav-actions">
           {token ? (
             <button className="btn outline" onClick={onLogout}>
@@ -60,102 +76,135 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
       </header>
 
       <main>
-        {/* Hero section */}
         <section id="home" className="hero">
           <div className="hero-left">
-            <span className="pill">Learning Hub for AL students</span>
+            <span className="pill">Smart learning platform for AL students</span>
+
             <h1>
               Make <span>AL Learning</span>
               <br />
-              Easy with AI
+              Easy with Learning Hub
             </h1>
+
             <p>
-              The modern AI learning platform designed for GCE Advanced Level
-              students in Sri Lanka. Practice with past papers and get AI
-              chatbot support to ensure your success.
+              The modern AI-powered learning platform for GCE Advanced Level students in Sri Lanka.
+              Watch lesson videos, explore notes, practice past papers, discover classes shared by
+              teachers, and get instant AI support to improve your learning faster.
             </p>
-            <p className="accent-line">AI මගින් AL ඉගෙනීම දැන් පහසුයි!</p>
+
+            <p className="accent-line">
+              Learning Hub මගින් උසස් පෙළ අධ්‍යාපනය පහසු කරමු! 🎓
+            </p>
+
             <div className="hero-actions">
-              <button className="btn solid" onClick={onRegisterClick}>Get Started Now</button>
-              <button className="btn outline">Try AI Chatbot</button>
+              <button className="btn solid" onClick={onRegisterClick}>
+                Get Started Now
+              </button>
+              <button className="btn outline" onClick={onLoginClick}>
+                Try AI Chatbot
+              </button>
             </div>
-            
-            </div>
-          
+          </div>
 
           <div className="hero-right">
-            {/* Dashboard illustration image */}
             <div className="image-card">
               <img src="/dashboard-image.png" alt="Students learning" />
             </div>
           </div>
         </section>
 
-        {/* Product feature cards */}
         <section className="section key-features">
           <div className="section-header">
             <h2>Key Features</h2>
             <p>
-              Features designed to make your AL learning more effective and
-              enjoyable
+              Everything students need to learn clearly, practice confidently, and improve effectively
             </p>
           </div>
+
           <div className="feature-grid">
-            <div className="feature-card blue">
-              <div className="feature-icon">🤖</div>
-              <h3>AI Chatbot</h3>
-              <p>
-                Ask any question in Sinhala or English. Our AI tutor provides
-                detailed explanations and examples to help you understand
-                better.
-              </p>
-              <p className="feature-accent blue-text">
-                සිංහලෙන් ප්‍රශ්න අසන්න!
-              </p>
-              <button className="link-btn blue-text">Learn More →</button>
-            </div>
+  <div className="feature-card blue">
+    <div className="feature-icon">🎥</div>
+    <h3>Lesson Videos</h3>
+    <p>
+      Students can watch lesson-based videos to understand each topic clearly and build
+      strong subject knowledge.
+    </p>
+    <p className="feature-accent blue-text">
+      පාඩම් වීඩියෝ මඟින් ඉගෙන ගන්න
+    </p>
+  </div>
 
-            <div className="feature-card green">
-              <div className="feature-icon">📄</div>
-              <h3>Past Papers</h3>
-              <p>
-                Practice with 5 years of past papers including MCQ, Structured,
-                and Essay questions. Track your progress over time.
-              </p>
-              <p className="feature-accent green-text">
-                පහසුවෙන් පසු ප්‍රශ්න පත්‍ර පුහුණු වන්න
-              </p>
-              <button className="link-btn green-text">Learn More →</button>
-            </div>
+  <div className="feature-card green">
+    <div className="feature-icon">📘</div>
+    <h3>Notes & Resources</h3>
+    <p>
+      Explore and download theory notes and learning materials provided for each lesson
+      to support self-study.
+    </p>
+    <p className="feature-accent green-text">
+      සටහන් සහ ඉගෙනුම් සම්පත් ලබාගන්න
+    </p>
+  </div>
 
-            <div className="feature-card purple">
-              <div className="feature-icon">📈</div>
-              <h3>AI Marking</h3>
-              <p>
-                Get your answers automatically marked by AI with detailed
-                feedback and improvement suggestions in Sinhala.
-              </p>
-              <p className="feature-accent purple-text">
-                AI ඇගයීම් තුළින් නිවැරදි කිරීම
-              </p>
-              <button className="link-btn purple-text">Learn More →</button>
-            </div>
-          </div>
+  <div className="feature-card purple">
+    <div className="feature-icon">📝</div>
+    <h3>Past Paper Practice</h3>
+    <p>
+      Practice past paper questions according to the lesson.
+    </p>
+    <p className="feature-accent purple-text">
+      පසුගිය ප්‍රශ්න පත්‍ර වල ප්‍රශ්න මගින් පුහුණුව ලබා ගන්න
+    </p>
+  </div>
+
+  <div className="feature-card blue">
+    <div className="feature-icon">🤖</div>
+    <h3>AI Chatbot Support</h3>
+    <p>
+      Ask anything you cannot understand about the lesson and get support instantly.
+    </p>
+    <p className="feature-accent blue-text">
+      නොතේරෙන දේවල් ගැන AI chatbot සහාය ලබා ගන්න
+    </p>
+  </div>
+
+  <div className="feature-card green">
+    <div className="feature-icon">📊</div>
+    <h3>Track Progress</h3>
+    <p>
+      Students can review their performance and get a better idea of their progress
+      in each lesson and subject area.
+    </p>
+    <p className="feature-accent green-text">
+      ඔබේ ප්‍රගතිය නිරීක්ෂණය කරන්න
+    </p>
+  </div>
+
+  <div className="feature-card purple">
+    <div className="feature-icon">🏫</div>
+    <h3>Explore Online & Physical Classes</h3>
+    <p>
+      Explore online and physical classes shared by teachers.
+    </p>
+    <p className="feature-accent purple-text">
+      ලංකාව පුරා ඇති පන්ති පිළිබඳ විස්තර දැන ගන්න
+    </p>
+  </div>
+</div>
         </section>
 
-        {/* 3-step usage flow */}
         <section className="section how-it-works">
           <div className="section-header">
             <h2>How It Works</h2>
             <p>Start your AL learning journey in 3 simple steps</p>
           </div>
+
           <div className="steps">
             <div className="step-card">
               <div className="step-badge blue">1</div>
               <h3>Register</h3>
               <p>
-                Choose your stream and subjects, then create a free account to
-                get started.
+                Create your free account and sign in to start learning with ease.
               </p>
               <p className="step-accent blue-text">
                 නොමිලේ ලියාපදිංචි වන්න
@@ -164,20 +213,22 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
 
             <div className="step-card">
               <div className="step-badge green">2</div>
-              <h3>Practice</h3>
+              <h3>Learn & Practice</h3>
               <p>
-                Improve your knowledge using past papers and the AI chatbot for
-                guidance.
+                Watch lesson videos, refer to notes, and practice past papers to improve your
+                knowledge and skills.
               </p>
-              <p className="step-accent green-text">පුහුණු වී දැනුම වැඩි කරගන්න</p>
+              <p className="step-accent green-text">
+                ඉගෙනගෙන පුහුණු වන්න
+              </p>
             </div>
 
             <div className="step-card">
               <div className="step-badge purple">3</div>
               <h3>Track Progress</h3>
               <p>
-                Analyze your results and improve your weak areas with AI
-                recommendations.
+                Analyze your results and understand your progress in each lesson with guided
+                learning support.
               </p>
               <p className="step-accent purple-text">
                 ප්‍රගතිය නිවැරදිව තක්සේරු කරන්න
@@ -186,7 +237,25 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
           </div>
         </section>
 
-        {/* Stream and subject overview */}
+        <section className="section teacher-support">
+  <div className="section-header">
+    <h2>For Teachers</h2>
+    <p>A simple way to share class details with students</p>
+  </div>
+
+  <div className="teacher-support-card">
+    <div className="teacher-support-icon">🏫</div>
+    <h3>Publish Class Details</h3>
+    <p>
+      Teachers can publish online and physical class details so students can
+      easily explore learning opportunities across Sri Lanka.
+    </p>
+    <p className="teacher-support-accent">
+      ලංකාව පුරා ඇති පන්ති පිළිබඳ විස්තර පළ කරන්න
+    </p>
+  </div>
+</section>
+
         <section id="subjects" className="section streams">
           <div className="section-header">
             <h2>Streams &amp; Subjects</h2>
@@ -198,7 +267,6 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
               <div className="stream-icon">🧪</div>
               <h3>Biology Stream</h3>
               <p className="stream-accent green-text">ජීව විද්‍යා ධාරාව</p>
-              <p>Biology, Chemistry, Physics</p>
               <div className="tag-row green-text">
                 <span className="tag">Biology</span>
                 <span className="tag">Chemistry</span>
@@ -207,10 +275,9 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
             </div>
 
             <div className="stream-card blue">
-              <div className="stream-icon">🧮</div>
+              <div className="stream-icon">📐</div>
               <h3>Mathematics Stream</h3>
               <p className="stream-accent blue-text">ගණිත ධාරාව</p>
-              <p>Combined Maths, Physics, Chemistry</p>
               <div className="tag-row blue-text">
                 <span className="tag">Combined Maths</span>
                 <span className="tag">Physics</span>
@@ -222,7 +289,6 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
               <div className="stream-icon">📊</div>
               <h3>Commerce Stream</h3>
               <p className="stream-accent orange-text">වාණිජ ධාරාව</p>
-              <p>Accounting, Business Studies, Economics</p>
               <div className="tag-row orange-text">
                 <span className="tag">Accounting</span>
                 <span className="tag">Business</span>
@@ -238,41 +304,39 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
           </div>
         </section>
 
-        {/* Short project introduction */}
-        <section id="about" className="section">
-          <h2>About Us</h2>
-          <p>
-            We help AL students learn faster with smart practice, AI help, and
-            a simple study path.
-          </p>
-        </section>
+        
 
-        {/* Final call-to-action */}
         <section className="cta">
           <div className="cta-content">
             <h2>Start Your AL Success Journey Today</h2>
-            <p>Make your learning more effective with AI technology.</p>
+            <p>
+              Learn with videos, notes, past papers, AI support, and class discovery in one place.
+            </p>
             <p className="cta-accent">
               ඔබේ AL සාර්ථකත්වය අද ආරම්භ කරන්න!
             </p>
             <div className="cta-actions">
-              <button className="btn solid">Register for Free</button>
-              <button className="btn outline light">Learn More</button>
+              <button className="btn solid" onClick={onRegisterClick}>
+                Register for Free
+              </button>
+              <button className="btn outline light" onClick={onAboutClick}>
+                Learn More
+              </button>
             </div>
           </div>
         </section>
 
-        {/* Footer links and contact */}
         <footer className="site-footer">
           <div className="footer-grid">
             <div>
               <div className="brand footer-brand">
-                <span className="brand-mark">AL</span>
-                <span className="brand-name">AL Learning</span>
+                <span className="brand-mark brand-logo-shell">
+                  <img src="/logo.png" alt="Learning Hub logo" className="brand-logo-image" />
+                </span>
+                <span className="brand-name">Learning Hub</span>
               </div>
               <p>
-                AI-powered learning platform for GCE Advanced Level students in
-                Sri Lanka.
+                AI-powered learning platform for GCE Advanced Level students in Sri Lanka.
               </p>
               <p className="footer-accent">අදම AL ඉගෙනීම අරඹන්න</p>
             </div>
@@ -299,7 +363,7 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
             <div>
               <h4>Contact Us</h4>
               <ul>
-                <li>info@allearning.lk</li>
+                <li>info@learninghub.lk</li>
                 <li>+94 11 234 5678</li>
               </ul>
               <div className="socials">
@@ -309,8 +373,9 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
               </div>
             </div>
           </div>
+
           <div className="footer-divider"></div>
-          <p className="footer-copy">© 2026 AL Learning. All rights reserved.</p>
+          <p className="footer-copy">© 2026 Learning Hub. All rights reserved.</p>
         </footer>
       </main>
     </div>
@@ -318,5 +383,3 @@ function Home({ token, onLoginClick, onRegisterClick, onViewAllSubjects, onLogou
 }
 
 export default Home;
-
-

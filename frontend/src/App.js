@@ -1,33 +1,57 @@
 import { useState } from "react";
 import "./App.css";
 import Login from "./Login";
-import Home from "./Home";
+import Home from "./pages/landing/LandingPage";
 import Register from "./Register";
 import StudentDashboard from "./StudentDashboard";
 import SubjectsPage from "./SubjectsPage";
+import SubjectDetail from "./SubjectDetail";
+import LessonDetail from "./LessonDetail";
+import AboutUs from "./AboutUs";
+import RegisterRoleModal from "./RegisterRoleModal";
+import AdminPanel from "./AdminPanel";
+import TeacherDashboard from "./TeacherDashboard";
 
-// Root screen controller:
-// - stores auth token
-// - toggles between Home and Login views
 function App() {
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [user, setUser] = useState(storedUser);
   const [screen, setScreen] = useState(
-    localStorage.getItem("token") ? "dashboard" : "home"
+    storedUser?.role === "admin" ? "admin" : token ? "dashboard" : "home"
   );
+  const [selectedRole, setSelectedRole] = useState("student");
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedLesson, setSelectedLesson] = useState(null);
 
-  // Save token after successful login.
-  function handleLogin(newToken) {
-    localStorage.setItem("token", newToken);
-    setToken(newToken);
-    setScreen("dashboard");
+  function handleLogin(loginResult) {
+    if (!loginResult?.token || !loginResult?.user) {
+      return;
+    }
+
+    localStorage.setItem("token", loginResult.token);
+    localStorage.setItem("user", JSON.stringify(loginResult.user));
+    setToken(loginResult.token);
+    setUser(loginResult.user);
+
+    if (loginResult.user.role === "admin") {
+      setScreen("admin");
+    } else if (loginResult.user.role === "teacher") {
+      setScreen("teacher");
+    } else {
+      setScreen("dashboard");
+    }
   }
 
-  // Clear token and return to logged-out state.
   function handleLogout() {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setToken(null);
+    setUser(null);
     setScreen("home");
   }
+
+  const isAdmin = user?.role === "admin";
+  const isTeacher = user?.role === "teacher";
 
   return (
     <div className="App">
@@ -35,13 +59,27 @@ function App() {
         <Login
           onLogin={handleLogin}
           onClose={() => setScreen("home")}
-          onSwitchRegister={() => setScreen("register")}
+          onSwitchRegister={() => setScreen("choose-role")}
+        />
+      ) : screen === "choose-role" ? (
+        <RegisterRoleModal
+          onClose={() => setScreen("home")}
+          onSelect={(role) => {
+            setSelectedRole(role);
+            setScreen("register");
+          }}
         />
       ) : screen === "register" ? (
         <Register
+          onLogin={handleLogin}
+          role={selectedRole}
           onClose={() => setScreen("home")}
           onSwitchLogin={() => setScreen("login")}
         />
+      ) : screen === "admin" && isAdmin ? (
+        <AdminPanel adminName={user.name} onLogout={handleLogout} />
+      ) : screen === "teacher" && isTeacher ? (
+        <TeacherDashboard teacherName={user.name} onLogout={handleLogout} />
       ) : screen === "dashboard" && token ? (
         <StudentDashboard
           onLogout={handleLogout}
@@ -52,16 +90,56 @@ function App() {
           token={token}
           onBackHome={() => setScreen("home")}
           onLoginClick={() => setScreen("login")}
-          onRegisterClick={() => setScreen("register")}
+          onRegisterClick={() => setScreen("choose-role")}
+          onLogout={handleLogout}
+          onSelectSubject={(subject) => {
+            setSelectedSubject(subject);
+            setScreen("subject-detail");
+          }}
+        />
+      ) : screen === "subject-detail" && selectedSubject && token ? (
+        <SubjectDetail
+          token={token}
+          subjectId={selectedSubject.id}
+          subjectName={selectedSubject.name}
+          streamName={selectedSubject.streamName}
+          onBack={() => {
+            setSelectedSubject(null);
+            setScreen("subjects");
+          }}
+          onSelectLesson={(lesson) => {
+            setSelectedLesson(lesson);
+            setScreen("lesson-detail");
+          }}
+        />
+      ) : screen === "lesson-detail" && selectedLesson && selectedSubject && token ? (
+        <LessonDetail
+          token={token}
+          lessonId={selectedLesson._id}
+          subjectName={selectedSubject.name}
+          onBack={() => {
+            setSelectedLesson(null);
+            setScreen("subject-detail");
+          }}
+        />
+      ) : screen === "about" ? (
+        <AboutUs
+          token={token}
+          onBackHome={() => setScreen("home")}
+          onViewAllSubjects={() => setScreen("subjects")}
+          onLoginClick={() => setScreen("login")}
+          onRegisterClick={() => setScreen("choose-role")}
           onLogout={handleLogout}
         />
       ) : (
         <Home
           token={token}
+          onBackHome={() => setScreen("home")}
           onLoginClick={() => setScreen("login")}
-          onRegisterClick={() => setScreen("register")}
+          onRegisterClick={() => setScreen("choose-role")}
           onDashboardClick={() => setScreen("dashboard")}
           onViewAllSubjects={() => setScreen("subjects")}
+          onAboutClick={() => setScreen("about")}
           onLogout={handleLogout}
         />
       )}

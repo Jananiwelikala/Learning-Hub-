@@ -6,8 +6,8 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
-  const [role, setRole] = useState("student");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -16,11 +16,11 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
     try {
       const result = await login({ email, password });
 
-      if (result.token) {
-        onLogin(result.token);
+      if (result.success && result.token) {
+        onLogin(result);
         setMessage("Login successful");
       } else {
-        setMessage(result.message || "Login failed");
+        setMessage(result.error || "Login failed");
       }
     } catch (err) {
       setMessage("Cannot connect to server");
@@ -31,7 +31,9 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
     <div className="login-page">
       <header className="login-topbar">
         <div className="login-brand">
-          <span className="login-brand-mark">AL</span>
+          <span className="login-brand-mark login-brand-logo-shell">
+            <img src="/logo1.png" alt="Learning Hub logo" className="login-brand-logo-image" />
+          </span>
           <span className="login-brand-name">Learning Hub</span>
         </div>
 
@@ -42,33 +44,21 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
 
       <main className="login-main">
         <div className="login-layout">
-          <div className="login-headline">
-            <h1>Welcome Back!</h1>
-            <p>Sign in to continue learning</p>
-          </div>
-
           <section className="login-card">
-            <h3>Login As</h3>
-            <div className="role-switch" aria-label="Login role selector">
-              <button
-                type="button"
-                className={`role-btn ${role === "student" ? "active" : ""}`}
-                onClick={() => setRole("student")}
-              >
-                Student
-              </button>
-              <button
-                type="button"
-                className={`role-btn ${role === "teacher" ? "active" : ""}`}
-                onClick={() => setRole("teacher")}
-              >
-                Teacher
-              </button>
+            <div className="login-icon-badge">👤</div>
+
+            <div className="login-headline">
+              <h1>Welcome Back!</h1>
+              <p>Sign in to continue your learning journey</p>
+              <p className="login-accent-text">
+                Continue your Learning Hub journey with confidence.
+              </p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
               <label htmlFor="login-email">Email Address</label>
               <div className="input-wrap">
+                <span className="input-symbol">✉</span>
                 <input
                   id="login-email"
                   type="email"
@@ -81,6 +71,7 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
 
               <label htmlFor="login-password">Password</label>
               <div className="input-wrap">
+                <span className="input-symbol">🔒</span>
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
@@ -100,7 +91,14 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
               </div>
 
               <div className="login-row">
-                <span />
+                <label className="remember-check">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  <span>Remember me</span>
+                </label>
                 <button type="button" className="forgot-link">
                   Forgot Password?
                 </button>
@@ -111,7 +109,7 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
               </button>
 
               <div className="login-divider">
-                <span>or</span>
+                <span>or continue with</span>
               </div>
 
               <p className="register-hint">

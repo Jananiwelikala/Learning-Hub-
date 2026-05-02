@@ -143,4 +143,69 @@ router.get(
   }
 );
 
+/**
+ * PROTECTED
+ * POST /api/assessments/mcq/submit
+ * Submit MCQ answer and immediately evaluate it
+ */
+router.post(
+  "/mcq/submit",
+  auth,
+  roleMiddleware(["student", "teacher", "admin"]),
+  async (req, res) => {
+    try {
+      const { lessonId, questionId, selectedOptionIndex } = req.body;
+
+      if (!lessonId || !questionId || selectedOptionIndex === undefined) {
+        return res.status(400).json({
+          message: "lessonId, questionId, and selectedOptionIndex are required",
+        });
+      }
+
+      // Get the question to find correct answer
+      const question = await AssessmentQuestion.findById(questionId);
+      if (!question) {
+        return res.status(404).json({ message: "Question not found" });
+      }
+
+      if (question.questionType !== "mcq") {
+        return res.status(400).json({ message: "This is not an MCQ question" });
+      }
+
+      const isCorrect = selectedOptionIndex === question.correctOptionIndex;
+
+      // Store attempt
+      const attempt = await AssessmentAttempt.create({
+        student: req.user.id,
+        lesson: lessonId,
+        questionType: "mcq",
+        examYear: question.examYear,
+        mcqAttempt: {
+          answers: [
+            {
+              mcqId: questionId,
+              selectedOptionIndex: selectedOptionIndex,
+              isCorrect: isCorrect,
+            },
+          ],
+          totalScore: isCorrect ? question.maxMarks : 0,
+          maxScore: question.maxMarks,
+          attemptedAt: new Date(),
+        },
+      });
+
+      res.json({
+        attemptId: attempt._id,
+        isCorrect: isCorrect,
+        correctOptionIndex: question.correctOptionIndex,
+        explanation: question.explanation || "",
+        maxMarks: question.maxMarks,
+        earnedMarks: isCorrect ? question.maxMarks : 0,
+      });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
 module.exports = router;

@@ -1,0 +1,285 @@
+.lesson-detail {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e8f0ff 100%);
+  padding-bottom: 60px;
+}
+
+.lesson-header {
+  background: white;
+  border-bottom: 1px solid #e0e7ff;
+  padding: 32px 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.lesson-header .back-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 12px;
+  margin: -8px 0 16px -12px;
+  transition: all 0.3s ease;
+}
+
+.lesson-header .back-btn:hover {
+  color: #2563eb;
+  transform: translateX(-4px);
+}
+
+.lesson-header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.breadcrumb {
+  font-size: 14px;
+  color: #64748b;
+  margin: 8px 0 0 0;
+}
+
+.lesson-tabs {
+  background: white;
+  border-bottom: 2px solid #e0e7ff;
+  padding: 0 40px;
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 16px 24px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: #3b82f6;
+}
+
+.tab-btn.active {
+  color: #3b82f6;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #3b82f6;
+}
+
+.lesson-content {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 48px 40px;
+}
+
+.tab-content {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.tab-content h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 24px 0;
+}
+
+.video-container {
+  margin-bottom: 32px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.video-container iframe {
+  display: block;
+  border-radius: 12px;
+}
+
+.lesson-description {
+  background: #f0fdf4;
+  border-left: 4px solid #10b981;
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 24px;
+}
+
+.lesson-description h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #065f46;
+  margin: 0 0 12px 0;
+}
+
+.lesson-description p {
+  color: #047857;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.materials-container {
+  display: grid;
+  gap: 16px;
+}
+
+.material-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.material-card:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.material-icon {
+  font-size: 40px;
+  flex-shrink: 0;
+}
+
+.material-info {
+  flex: 1;
+}
+
+.material-info h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e40af;
+  margin: 0 0 4px 0;
+}
+
+.material-info p {
+  font-size: 14px;
+  color: #3b82f6;
+  margin: 0;
+}
+
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.download-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .lesson-header {
+    padding: 24px 20px;
+  }
+
+  .lesson-header h1 {
+    font-size: 28px;
+  }
+
+  .lesson-tabs {
+    padding: 0 20px;
+  }
+
+  .tab-btn {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .lesson-content {
+    padding: 32px 20px;
+  }
+
+  .tab-content {
+    padding: 24px;
+  }
+
+  .tab-content h2 {
+    font-size: 20px;
+  }
+
+  .material-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .material-info {
+    width: 100%;
+  }
+
+  .download-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .lesson-detail {
+    padding-bottom: 40px;
+  }
+
+  .lesson-header {
+    padding: 16px;
+  }
+
+  .lesson-header h1 {
+    font-size: 22px;
+  }
+
+  .lesson-tabs {
+    padding: 0;
+  }
+
+  .tab-btn {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .lesson-content {
+    padding: 24px 16px;
+  }
+
+  .tab-content {
+    padding: 16px;
+  }
+
+  .video-container iframe {
+    height: 300px !important;
+  }
+}

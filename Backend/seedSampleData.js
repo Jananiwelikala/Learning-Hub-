@@ -3,6 +3,8 @@ const Subject = require("./models/Subject");
 const Lesson = require("./models/Lesson");
 const MCQ = require("./models/MCQ");
 const AssessmentQuestion = require("./models/AssessmentQuestion");
+const User = require("./models/User");
+const bcrypt = require("bcryptjs");
 
 // Creates a small demo dataset for Biology -> Physics -> Measurements.
 async function seedSampleData() {
@@ -111,6 +113,32 @@ async function seedSampleData() {
         examYear: 2024,
       },
     ]);
+  }
+
+  const adminEmail = "admin@learninghub.lk";
+  const existingAdmin = await User.findOne({ email: adminEmail });
+  if (!existingAdmin) {
+    const hashedAdminPassword = await bcrypt.hash("Admin@123", 10);
+    await User.create({
+      name: "Learning Hub Admin",
+      email: adminEmail,
+      phone: "",
+      password: hashedAdminPassword,
+      role: "admin",
+    });
+  }
+
+  const teacherEmail = "teacher@learninghub.lk";
+  const existingTeacher = await User.findOne({ email: teacherEmail });
+  if (!existingTeacher) {
+    const hashedTeacherPassword = await bcrypt.hash("Teacher@123", 10);
+    await User.create({
+      name: "John Smith",
+      email: teacherEmail,
+      phone: "+94 77 123 4567",
+      password: hashedTeacherPassword,
+      role: "teacher",
+    });
   }
 }
 

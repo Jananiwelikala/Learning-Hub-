@@ -9,8 +9,12 @@ const router = express.Router();
 
 // PUBLIC: list streams
 router.get("/", async (req, res) => {
-  const streams = await Stream.find().sort({ createdAt: -1 });
-  res.json(streams);
+  try {
+    const streams = await Stream.find().sort({ createdAt: -1 });
+    res.json(streams);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // ADMIN: create stream

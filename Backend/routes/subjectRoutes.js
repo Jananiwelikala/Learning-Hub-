@@ -10,14 +10,18 @@ const router = express.Router();
 
 // PUBLIC: list subjects (optional filter by stream)
 router.get("/", async (req, res) => {
-  const filter = {};
-  if (req.query.streamId) filter.stream = req.query.streamId;
+  try {
+    const filter = {};
+    if (req.query.streamId) filter.stream = req.query.streamId;
 
-  const subjects = await Subject.find(filter)
-    .populate("stream", "name")
-    .sort({ createdAt: -1 });
+    const subjects = await Subject.find(filter)
+      .populate("stream", "name")
+      .sort({ createdAt: -1 });
 
-  res.json(subjects);
+    res.json(subjects);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // ADMIN: create subject

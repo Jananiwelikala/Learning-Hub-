@@ -1,302 +1,2884 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  getLessonDetails,
-  getLessons,
-  getMcqs,
-  getStreams,
-  getSubjectsByStream,
-  submitMcqs,
-} from "./api";
+import { useState, useEffect } from "react";
+import "./App.css";
+import styles from "./StudentDashboard.module.css";
+import { getApprovedPosts, createComment } from "./api";
+import LoadingSpinner from "./components/LoadingSpinner";
+import ErrorMessage from "./components/ErrorMessage";
+import EmptyState from "./components/EmptyState";
 
-function StudentDashboard({ onLogout, onBackHome }) {
-  const [streams, setStreams] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  const [lessons, setLessons] = useState([]);
-  const [selectedStreamId, setSelectedStreamId] = useState("");
-  const [selectedSubjectId, setSelectedSubjectId] = useState("");
-  const [selectedLessonId, setSelectedLessonId] = useState("");
-  const [lessonDetails, setLessonDetails] = useState(null);
-  const [mcqs, setMcqs] = useState([]);
-  const [answers, setAnswers] = useState({});
-  const [result, setResult] = useState(null);
-  const [message, setMessage] = useState("");
+function StudentDashboard({ onLogout, onBackHome, studentData }) {
+  const [activeView, setActiveView] = useState("home");
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [selectedClassPost, setSelectedClassPost] = useState(null);
+  const [expandedSubject, setExpandedSubject] = useState(null);
+  const [classPosts, setClassPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchFilters, setSearchFilters] = useState({
+    subject: "",
+    grade: "",
+    location: ""
+  });
 
+  const [student, setStudent] = useState({
+    name: studentData?.name || "Janani Upeksha",
+    email: studentData?.email || "student@example.com",
+    phone: studentData?.phone || "07XXXXXXXX",
+    stream: studentData?.stream || "Bio Science",
+    alYear: studentData?.alYear || "2026 A/L",
+    joinedDate: studentData?.joinedDate || "May 2025",
+    // Dashboard specific data
+    progress: 65,
+    completedLessons: 24,
+    pendingTasks: 5,
+    studyStreak: 7,
+  });
+
+  const [settings, setSettings] = useState({
+    darkMode: false,
+    notifications: true,
+  });
+
+  // Load approved class posts on component mount
   useEffect(() => {
-    async function loadStreams() {
-      const data = await getStreams();
-      if (!Array.isArray(data)) {
-        setMessage("Failed to load streams");
-        return;
-      }
-
-      setStreams(data);
-      const preferred = data.find((item) => item.name === "Biology Stream");
-      setSelectedStreamId((preferred || data[0] || {})._id || "");
-    }
-
-    loadStreams();
+    loadClassPosts();
   }, []);
 
+  async function loadClassPosts(filters = {}) {
+    setLoading(true);
+    setError(null);
+    const result = await getApprovedPosts(filters);
+    if (result.success) {
+      setClassPosts(result.posts);
+    } else {
+      setError(result.error);
+      console.error("Failed to load class posts:", result.error);
+    }
+    setLoading(false);
+  }
+
+  // Handle search and filtering
   useEffect(() => {
-    if (!selectedStreamId) {
-      setSubjects([]);
-      setSelectedSubjectId("");
-      return;
-    }
+    loadClassPosts(searchFilters);
+  }, [searchFilters]);
 
-    async function loadSubjects() {
-      const data = await getSubjectsByStream(selectedStreamId);
-      if (!Array.isArray(data)) {
-        setMessage("Failed to load subjects");
-        return;
+  const motivationText = "Stay focused. Small daily progress leads to big A/L results.";
+  const motivationSinhala = "සෑම දිනකම කරන කුඩා ප්‍රගතිය A/L සාර්ථකත්වයට මග පෙන්වයි.";
+  const alExamDate = new Date("2026-11-25"); // Sample A/L Exam Date
+  const today = new Date();
+  const daysLeft = Math.ceil((alExamDate - today) / (1000 * 60 * 60 * 24));
+
+  const latestNews = [
+    {
+      id: 1,
+      title: "2026 A/L timetable expected to be released next month",
+      sinhala: "2026 A/L කාලසටහන ලබන මාසයේ නිකුත් වේ",
+      tag: "Exam",
+      date: "Apr 20, 2026",
+    },
+    {
+      id: 2,
+      title: "Science stream revision seminar announced for May 2026",
+      sinhala: "විද්‍යා ධාරා සංශෝධන සම්මන්ත්‍රණයක් 2026 මැයි මසදී",
+      tag: "Seminar",
+      date: "Apr 18, 2026",
+    },
+    {
+      id: 3,
+      title: "Department releases updated past paper guidance for 2026",
+      sinhala: "දෙපාර්තමේන්තුව 2026 සඳහා නවතම මාර්ගෝපදේශ නිකුත් කරයි",
+      tag: "Update",
+      date: "Apr 15, 2026",
+    },
+  ];
+
+  const ongoingLessons = [
+    {
+      id: 1,
+      title: "Newton's Laws of Motion",
+      sinhala: "නිව්ටන්ගේ චලන නීති",
+      subject: "Physics",
+      progress: 68,
+      chapter: "Chapter 02",
+      color: "blue",
+    },
+    {
+      id: 2,
+      title: "Chemical bonding",
+      sinhala: "රසායනික බන්ධන",
+      subject: "Chemistry",
+      progress: 45,
+      chapter: "Chapter 03",
+      color: "green",
+    },
+    {
+      id: 3,
+      title: "Photosynthesis",
+      sinhala: "ප්‍රභාසංස්ලේෂණය",
+      subject: "Biology",
+      progress: 82,
+      chapter: "Chapter 01",
+      color: "teal",
+    },
+  ];
+
+  const newClasses = [
+    {
+      id: 1,
+      title: "Physics Revision Class",
+      sinhala: "භෞතික විද්‍යා සංශෝධන පන්තිය",
+      teacher: "Mr. Perera",
+      date: "Oct 28",
+      time: "4:00 PM",
+      tag: "Online",
+      color: "blue",
+    },
+    {
+      id: 2,
+      title: "Chemistry Theory Class",
+      sinhala: "රසායන විද්‍යා න්‍යාය පන්තිය",
+      teacher: "Ms. Silva",
+      date: "Nov 01",
+      time: "9:00 AM",
+      tag: "Physical",
+      color: "green",
+    },
+    {
+      id: 3,
+      title: "Combined Maths MCQ Class",
+      sinhala: "සංයුක්ත ගණිත MCQ පන්තිය",
+      teacher: "Mr. Fernando",
+      date: "Nov 05",
+      time: "6:00 PM",
+      tag: "Online",
+      color: "purple",
+    },
+  ];
+
+  const extraLessons = [
+    { id: 4, title: "Cell Biology", sinhala: "සෛල ජීව විද්‍යාව", subject: "Biology", progress: 58, chapter: "Chapter 04", color: "teal" },
+    { id: 5, title: "Vectors and Algebra", sinhala: "දෛශික හා බීජ ගණිතය", subject: "Combined Mathematics", progress: 42, chapter: "Chapter 02", color: "orange" },
+    { id: 6, title: "Programming Fundamentals", sinhala: "ක්‍රමලේඛන මූලධර්ම", subject: "ICT", progress: 73, chapter: "Chapter 01", color: "sky" },
+    { id: 7, title: "Final Accounts", sinhala: "අවසාන ගිණුම්", subject: "Accounting", progress: 64, chapter: "Chapter 05", color: "green" },
+    { id: 8, title: "Market Economy", sinhala: "වෙළෙඳපොළ ආර්ථිකය", subject: "Economics", progress: 55, chapter: "Chapter 03", color: "orange" },
+    { id: 9, title: "Political Ideologies", sinhala: "දේශපාලන වාද", subject: "Political Science", progress: 61, chapter: "Chapter 02", color: "blue" },
+    { id: 10, title: "Science for Technology Basics", sinhala: "තාක්ෂණවේදය සඳහා විද්‍යාව", subject: "Science for Technology", progress: 52, chapter: "Chapter 01", color: "green" },
+  ];
+
+  const [showAiBubble] = useState(true);
+
+  // Legacy fallback map kept only to avoid disturbing earlier dashboard data.
+  // eslint-disable-next-line no-unused-vars
+  const subjectMap = {
+    Science: [
+      { name: "Physics", progress: 68, icon: "⚛️" },
+      { name: "Chemistry", progress: 62, icon: "🧪" },
+      { name: "Biology", progress: 71, icon: "🌿" },
+      { name: "Combined Maths", progress: 55, icon: "📈" },
+      { name: "ICT", progress: 60, icon: "💻" },
+    ],
+    Commerce: [
+      { name: "Accounting", progress: 64, icon: "📘" },
+      { name: "Economics", progress: 58, icon: "💹" },
+      { name: "Business Studies", progress: 70, icon: "🏢" },
+      { name: "ICT", progress: 61, icon: "💻" },
+    ],
+    Arts: [
+      { name: "Political Science", progress: 66, icon: "🏛️" },
+      { name: "History", progress: 60, icon: "📜" },
+      { name: "Sinhala", progress: 74, icon: "📝" },
+      { name: "Geography", progress: 63, icon: "🌍" },
+      { name: "Logic", progress: 57, icon: "🧠" },
+    ],
+  };
+
+  // Legacy fallback details kept while the exact stream map is active below.
+  // eslint-disable-next-line no-unused-vars
+  const subjectDetailsMap = {
+    Science: [
+      { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
+      { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
+      { name: "Biology", sinhala: "ජීව විද්‍යාව", progress: 75, icon: "◇", lessons: "32 lessons", completed: "24/32", color: "teal" },
+      { name: "Combined Maths", sinhala: "සංයුක්ත ගණිතය", progress: 35, icon: "▦", lessons: "40 lessons", completed: "14/40", color: "orange" },
+      { name: "ICT", sinhala: "තොරතුරු තාක්ෂණය", progress: 90, icon: "▭", lessons: "18 lessons", completed: "16/18", color: "sky" },
+    ],
+    Commerce: [
+      { name: "Accounting", sinhala: "ගිණුම්කරණය", progress: 64, icon: "▣", lessons: "22 lessons", completed: "14/22", color: "green" },
+      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
+      { name: "Business Studies", sinhala: "ව්‍යාපාර අධ්‍යයනය", progress: 70, icon: "▦", lessons: "26 lessons", completed: "18/26", color: "blue" },
+      { name: "ICT", sinhala: "තොරතුරු තාක්ෂණය", progress: 61, icon: "▭", lessons: "18 lessons", completed: "11/18", color: "sky" },
+    ],
+    Arts: [
+      { name: "Political Science", sinhala: "දේශපාලන විද්‍යාව", progress: 66, icon: "▥", lessons: "24 lessons", completed: "16/24", color: "blue" },
+      { name: "History", sinhala: "ඉතිහාසය", progress: 60, icon: "▤", lessons: "20 lessons", completed: "12/20", color: "orange" },
+      { name: "Sinhala", sinhala: "සිංහල", progress: 74, icon: "✎", lessons: "22 lessons", completed: "16/22", color: "teal" },
+      { name: "Geography", sinhala: "භූගෝල විද්‍යාව", progress: 63, icon: "◎", lessons: "20 lessons", completed: "13/20", color: "green" },
+      { name: "Logic", sinhala: "තර්ක ශාස්ත්‍රය", progress: 57, icon: "◇", lessons: "18 lessons", completed: "10/18", color: "purple" },
+    ],
+  };
+
+  const streamSubjectMap = {
+    "Bio Science": [
+      { name: "Biology", sinhala: "ජීව විද්‍යාව", progress: 75, icon: "◇", lessons: "32 lessons", completed: "24/32", color: "teal" },
+      { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
+      { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
+      { name: "Agricultural Science", sinhala: "කෘෂි විද්‍යාව", progress: 40, icon: "⌁", lessons: "20 lessons", completed: "8/20", color: "orange" },
+    ],
+    "Physical Science": [
+      { name: "Combined Mathematics", sinhala: "සංයුක්ත ගණිතය", progress: 35, icon: "▦", lessons: "40 lessons", completed: "14/40", color: "orange" },
+      { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
+      { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
+      { name: "ICT", sinhala: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", progress: 90, icon: "▭", lessons: "18 lessons", completed: "16/18", color: "sky" },
+    ],
+    Commerce: [
+      { name: "Accounting", sinhala: "ගිණුම්කරණය", progress: 64, icon: "▣", lessons: "22 lessons", completed: "14/22", color: "green" },
+      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
+      { name: "Business Studies", sinhala: "ව්‍යාපාර අධ්‍යයනය", progress: 70, icon: "▦", lessons: "26 lessons", completed: "18/26", color: "blue" },
+      { name: "ICT", sinhala: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", progress: 61, icon: "▭", lessons: "18 lessons", completed: "11/18", color: "sky" },
+      { name: "Business Statistics", sinhala: "ව්‍යාපාර සංඛ්‍යානය", progress: 42, icon: "▥", lessons: "20 lessons", completed: "8/20", color: "purple" },
+    ],
+    Arts: [
+      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
+      { name: "Geography", sinhala: "භූගෝල විද්‍යාව", progress: 63, icon: "◎", lessons: "20 lessons", completed: "13/20", color: "green" },
+      { name: "History", sinhala: "ඉතිහාසය", progress: 60, icon: "▤", lessons: "20 lessons", completed: "12/20", color: "orange" },
+      { name: "Logic", sinhala: "තර්ක ශාස්ත්‍රය", progress: 57, icon: "◇", lessons: "18 lessons", completed: "10/18", color: "purple" },
+      { name: "Media", sinhala: "මාධ්‍ය අධ්‍යයනය", progress: 52, icon: "▧", lessons: "18 lessons", completed: "9/18", color: "sky" },
+      { name: "Political Science", sinhala: "දේශපාලන විද්‍යාව", progress: 66, icon: "▥", lessons: "24 lessons", completed: "16/24", color: "blue" },
+      { name: "Art / Dancing / Music", sinhala: "චිත්‍ර / නර්තනය / සංගීතය", progress: 46, icon: "✎", lessons: "18 lessons", completed: "8/18", color: "teal" },
+    ],
+    Technology: [
+      { name: "Engineering Technology", sinhala: "ඉංජිනේරු තාක්ෂණවේදය", progress: 54, icon: "▦", lessons: "26 lessons", completed: "14/26", color: "blue" },
+      { name: "Bio-systems Technology", sinhala: "ජෛව පද්ධති තාක්ෂණවේදය", progress: 49, icon: "◇", lessons: "24 lessons", completed: "12/24", color: "teal" },
+      { name: "Science for Technology", sinhala: "තාක්ෂණවේදය සඳහා විද්‍යාව", progress: 68, icon: "△", lessons: "28 lessons", completed: "19/28", color: "green" },
+      { name: "ICT", sinhala: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", progress: 61, icon: "▭", lessons: "18 lessons", completed: "11/18", color: "sky" },
+      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
+      { name: "Agricultural Science", sinhala: "කෘෂි විද්‍යාව", progress: 40, icon: "⌁", lessons: "20 lessons", completed: "8/20", color: "purple" },
+    ],
+  };
+
+  const selectedStream =
+    streamSubjectMap[student.stream] ? student.stream :
+    student.stream === "Science" ? "Bio Science" :
+    "Bio Science";
+  const baseSubjects = streamSubjectMap[selectedStream];
+  const currentSubjects = selectedStream === "Bio Science" ? [
+    { name: "Biology", sinhala: "ජීව විද්‍යාව", progress: 75, icon: "◇", lessons: "32 lessons", completed: "24/32", color: "teal" },
+    { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
+    { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
+    { name: "Agricultural Science", sinhala: "කෘෂි විද්‍යාව", progress: 40, icon: "⌁", lessons: "20 lessons", completed: "8/20", color: "orange" },
+  ] : baseSubjects;
+  const currentSubjectNames = currentSubjects.map((subject) => subject.name).join(", ");
+  const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
+  const homeLessons = [...ongoingLessons, ...extraLessons]
+    .filter((lesson) => currentSubjectSet.has(lesson.subject))
+    .slice(0, 3);
+  const homeClasses = classPosts
+    .filter((post) => currentSubjectSet.has(post.subject))
+    .slice(0, 3)
+    .map((post) => ({
+      id: post._id,
+      title: post.title,
+      sinhala: post.title, // Could be enhanced with translation
+      subject: post.subject,
+      teacher: post.teacher?.name || "Teacher",
+      date: new Date(post.createdAt).toLocaleDateString(),
+      time: "TBD", // Could be added to model
+      tag: post.location.includes("Online") ? "Online" : "Physical",
+      color: "blue", // Could be based on subject
+      description: post.description
+    }));
+
+  const groupedClasses = classPosts.reduce((acc, post) => {
+    if (!acc[post.subject]) acc[post.subject] = [];
+    acc[post.subject].push({
+      id: post._id,
+      title: post.title,
+      sinhala: post.title,
+      subject: post.subject,
+      teacher: post.teacher?.name || "Teacher",
+      date: new Date(post.createdAt).toLocaleDateString(),
+      time: "TBD",
+      tag: post.location.includes("Online") ? "Online" : "Physical",
+      color: "blue",
+      description: post.description
+    });
+    return acc;
+  }, {});
+
+  const pastPaperItems = [
+    "2023 Physics Paper",
+    "2022 Chemistry Paper",
+    "2021 Biology Paper",
+    "2024 Combined Maths Paper",
+  ];
+
+  // Handlers
+  const handleToggleSetting = (field) => {
+    setSettings((prev) => {
+      const updated = {
+        ...prev,
+        [field]: !prev[field],
+      };
+
+      if (field === "darkMode") {
+        document.body.classList.toggle("dark-mode", updated[field]);
       }
 
-      setSubjects(data);
-      const preferred = data.find((item) => item.name === "Physics");
-      setSelectedSubjectId((preferred || data[0] || {})._id || "");
+      return updated;
+    });
+  };
+
+  async function submitComment(postId, commentText) {
+    const token = localStorage.getItem("token");
+    const result = await createComment(token, {
+      postId,
+      content: commentText
+    });
+
+    if (result.success) {
+      alert("Comment submitted successfully! The teacher will respond soon.");
+      // Could refresh comments if we had a comments view
+    } else {
+      alert("Error: " + result.error);
     }
+  }
 
-    loadSubjects();
-  }, [selectedStreamId]);
+  function handleUpdateProfile(key, value) {
+    setStudent(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  }
 
-  useEffect(() => {
-    if (!selectedSubjectId) {
-      setLessons([]);
-      setSelectedLessonId("");
-      return;
-    }
+  // Kept as a fallback while the compact dashboard design is active.
+  // eslint-disable-next-line no-unused-vars
+  const renderHome = () => (
+    <div className="home-view">
+      <div className="motivation-banner">
+        <div className="motivation-content">
+          <div className="motivation-icon">🌟</div>
+          <p>{motivationText}</p>
+        </div>
+      </div>
 
-    async function loadLessons() {
-      const data = await getLessons(selectedSubjectId);
-      if (!Array.isArray(data)) {
-        setMessage("Failed to load lessons");
-        return;
-      }
+      <div className="home-top-grid">
+        <div className="dashboard-card countdown-card">
+          <h3>A/L Exam Countdown</h3>
+          <p className="exam-date">Date: {alExamDate.toDateString()}</p>
+          <p className="days-left"><strong>{daysLeft}</strong> Days Left</p>
+        </div>
 
-      setLessons(data);
-      const preferred = data.find((item) => item.title === "Measurements");
-      setSelectedLessonId((preferred || data[0] || {})._id || "");
-    }
+        <div className="dashboard-card news-card">
+          <h3>Latest A/L News</h3>
+          <ul className="news-list">
+            {latestNews.map((news) => (
+              <li key={news.id}>{news.title}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
-    loadLessons();
-  }, [selectedSubjectId]);
+      <section className="home-section">
+        <h3>Ongoing Lessons</h3>
+          <div className="lesson-cards-grid">
+            {ongoingLessons.map((lesson) => (
+              <div key={lesson.id} className="lesson-card-item">
+                <h4>{lesson.title}</h4>
+                <p className="lesson-meta">{lesson.subject} • {lesson.chapter}</p>
+                <div className="lesson-progress-bar">
+                  <div
+                    className="lesson-progress-fill"
+                    style={{ width: `${lesson.progress}%` }}
+                  ></div>
+                </div>
+                <small>{lesson.progress}% Completed</small>
+                <button className="btn solid sm">Continue</button>
+              </div>
+            ))}
+          </div>
+      </section>
 
-  useEffect(() => {
-    if (!selectedLessonId) {
-      setLessonDetails(null);
-      setMcqs([]);
-      return;
-    }
+      <section className="home-section">
+        <h3>New Class Details</h3>
+          <div className="class-cards-list">
+            {newClasses.map((cls) => (
+              <div key={cls.id} className="class-card-item">
+                <div>
+                  <h4>{cls.title}</h4>
+                  <p className="class-meta">{cls.teacher} • {cls.date} {cls.time}</p>
+                </div>
+                <button className="btn outline sm">Join</button>
+              </div>
+            ))}
+          </div>
+      </section>
 
-    async function loadLessonBundle() {
-      const [detailsData, mcqData] = await Promise.all([
-        getLessonDetails(selectedLessonId),
-        getMcqs(selectedLessonId),
-      ]);
-
-      if (detailsData && !detailsData.message) {
-        setLessonDetails(detailsData);
-      } else {
-        setLessonDetails(null);
-        setMessage(detailsData.message || "Failed to load lesson");
-      }
-
-      if (Array.isArray(mcqData)) {
-        setMcqs(mcqData);
-      } else {
-        setMcqs([]);
-        setMessage(mcqData.message || "Failed to load MCQs");
-      }
-
-      setAnswers({});
-      setResult(null);
-    }
-
-    loadLessonBundle();
-  }, [selectedLessonId]);
-
-  const answeredCount = useMemo(
-    () => Object.keys(answers).length,
-    [answers]
+      <section className="home-section">
+        <h3>Active Subjects</h3>
+          <div className="subject-card-grid-home">
+            {currentSubjects.map((subject) => (
+              <div key={subject.name} className="subject-card-modern-home">
+                <div className="subject-emoji">{subject.icon}</div>
+                <h4>{subject.name}</h4>
+                <p>{subject.progress}% completed</p>
+                <div className="subject-progress-home">
+                  <div
+                    className="subject-progress-fill-home"
+                    style={{ width: `${subject.progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+          </div>
+      </section>
+    </div>
   );
 
-  function selectAnswer(mcqId, selectedOptionIndex) {
-    setAnswers((prev) => ({ ...prev, [mcqId]: selectedOptionIndex }));
-  }
+  const renderCompactHome = () => (
+    <div className="home-view compact-dashboard">
+      <div className="motivation-banner">
+        <div className="motivation-content">
+          <div className="motivation-icon">☀</div>
+          <div>
+            <p className="hero-greeting">Good Morning, Janani! ✨</p>
+            <h2>{motivationText}</h2>
+            <p className="sinhala-line">{motivationSinhala}</p>
+          </div>
+        </div>
+        <div className="hero-count-box">
+          <strong>{daysLeft}</strong>
+          <span>Days to A/L</span>
+          <small>A/L සඳහා දින</small>
+        </div>
+      </div>
 
-  async function handleSubmit() {
-    if (!selectedLessonId) return;
+      <div className="home-top-grid">
+        <div className="dashboard-card countdown-card compact-card">
+          <div className="card-title-row">
+            <span className="mini-icon blue">⏱</span>
+            <div>
+              <h3>A/L Exam Countdown</h3>
+              <p className="section-subtitle">A/L විභාග ගණනය</p>
+            </div>
+          </div>
+          <div className="countdown-number">
+            <strong>{daysLeft}</strong>
+            <span>Days Left / දින ඉතිරි</span>
+          </div>
+          <div className="detail-list">
+            <p><span>Exam Date</span><strong>25 November 2026</strong></p>
+            <p><span>Stream</span><strong>{selectedStream}</strong></p>
+            <p><span>Subjects</span><strong>{currentSubjectNames}</strong></p>
+          </div>
+          <div className="mini-progress-row">
+            <span>Overall Preparation</span>
+            <strong>58%</strong>
+          </div>
+          <div className="thin-progress"><span style={{ width: "58%" }}></span></div>
+        </div>
 
-    const payload = {
-      lessonId: selectedLessonId,
-      answers: Object.entries(answers).map(([mcqId, selectedOptionIndex]) => ({
-        mcqId,
-        selectedOptionIndex,
-      })),
-    };
+        <div className="dashboard-card news-card compact-card">
+          <div className="section-topline">
+            <div className="card-title-row">
+              <span className="mini-icon orange">▤</span>
+              <div>
+                <h3>Latest A/L News</h3>
+                <p className="section-subtitle">නවතම A/L පුවත්</p>
+              </div>
+            </div>
+            <button type="button" className="view-all-btn">View All</button>
+          </div>
 
-    const data = await submitMcqs(payload);
-    if (data && typeof data.scorePercent === "number") {
-      setResult(data);
-    } else {
-      setMessage(data.message || "Failed to calculate score");
-    }
-  }
+          <div className="news-list compact-news-list">
+            {latestNews.map((news) => (
+              <div className="news-item" key={news.id}>
+                <span className="news-icon">▣</span>
+                <div>
+                  <h4>{news.title}</h4>
+                  <p>{news.sinhala}</p>
+                  <div className="tag-line">
+                    <span>{news.tag}</span>
+                    <small>{news.date}</small>
+                  </div>
+                </div>
+                <strong>›</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <section className="home-section">
+        <div className="section-topline">
+          <div>
+            <h3>Ongoing Lessons</h3>
+            <p className="section-subtitle">දැනට කරගෙන යන පාඩම්</p>
+          </div>
+          <button type="button" className="view-all-btn">View All</button>
+        </div>
+        <div className="lesson-cards-grid">
+          {homeLessons.map((lesson) => (
+            <div key={lesson.id} className={`lesson-card-item ${lesson.color}`}>
+              <div className="lesson-card-top">
+                <span className={`mini-icon ${lesson.color}`}>⌂</span>
+                <small>{lesson.chapter}</small>
+              </div>
+              <h4>{lesson.title}</h4>
+              <p className="lesson-sinhala">{lesson.sinhala}</p>
+              <p className="lesson-meta">{lesson.subject}</p>
+              <div className="mini-progress-row">
+                <span>Progress</span>
+                <strong>{lesson.progress}%</strong>
+              </div>
+              <div className="lesson-progress-bar">
+                <div className="lesson-progress-fill" style={{ width: `${lesson.progress}%` }}></div>
+              </div>
+              <button className="btn solid sm">Continue / ඉදිරියට</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="section-topline">
+          <div>
+            <h3>New Class Details</h3>
+            <p className="section-subtitle">නව පන්ති විස්තර</p>
+          </div>
+          <button type="button" className="view-all-btn">View All</button>
+        </div>
+        <div className="class-cards-list">
+          {homeClasses.map((cls) => (
+            <div key={cls.id} className={`class-card-item ${cls.color}`}>
+              <div className="class-card-top">
+                <span className={`mini-icon ${cls.color}`}>▻</span>
+                <small>{cls.tag}</small>
+              </div>
+              <div>
+                <h4>{cls.title}</h4>
+                <p className="lesson-sinhala">{cls.sinhala}</p>
+                <p className="class-meta">♙ {cls.teacher}</p>
+                <p className="class-meta">□ {cls.date} · ◷ {cls.time}</p>
+              </div>
+              <button className="btn solid sm">Join Class</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section">
+        <div className="section-topline">
+          <div>
+            <h3>Active Subjects</h3>
+            <p className="section-subtitle">සක්‍රීය විෂයන්</p>
+          </div>
+          <button type="button" className="view-all-btn">View All</button>
+        </div>
+        <div className="subject-card-grid-home">
+          {currentSubjects.map((subject) => (
+            <div key={subject.name} className={`subject-card-modern-home ${subject.color}`}>
+              <div className="subject-emoji">{subject.icon}</div>
+              <h4>{subject.name}</h4>
+              <p>{subject.sinhala}</p>
+              <div className="mini-progress-row">
+                <small>{subject.completed}</small>
+                <strong>{subject.progress}%</strong>
+              </div>
+              <div className="subject-progress-home">
+                <div className="subject-progress-fill-home" style={{ width: `${subject.progress}%` }}></div>
+              </div>
+              <small className="lesson-count">{subject.lessons}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="summary-grid">
+        <div className="summary-card"><span>▯</span><strong>82</strong><p>Lessons Completed</p><small>සම්පූර්ණ කළ පාඩම්</small></div>
+        <div className="summary-card"><span>▤</span><strong>34</strong><p>Papers Practiced</p><small>ප්‍රශ්න පත්‍ර පුහුණුව</small></div>
+        <div className="summary-card"><span>◷</span><strong>126</strong><p>Study Hours</p><small>අධ්‍යයන පැය</small></div>
+        <div className="summary-card"><span>◎</span><strong>74%</strong><p>Average Score</p><small>සාමාන්‍ය ලකුණු</small></div>
+      </div>
+    </div>
+  );
+
+  const renderSubjects = () => (
+    <div className="dashboard-view-content">
+      <div className="section-head page-head">
+        <div>
+          <h3>My Subjects</h3>
+          <p className="page-subtext">Subjects based on your selected stream: {student.stream}</p>
+        </div>
+      </div>
+
+      <div className="subject-card-grid full">
+        {currentSubjects.map((subject) => (
+          <div key={subject.name} className="subject-card-modern large">
+            <div className="subject-emoji">{subject.icon}</div>
+            <h4>{subject.name}</h4>
+            <p>{subject.progress}% completed</p>
+            <div className="subject-progress">
+              <div
+                className="subject-progress-fill"
+                style={{ width: `${subject.progress}%` }}
+              ></div>
+            </div>
+            <button className="btn solid subject-btn">Open Subject</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Legacy classes renderer kept as fallback.
+  // eslint-disable-next-line no-unused-vars
+  const renderClasses = () => (
+    <div className="dashboard-view-content">
+      <div className="section-head page-head">
+        <div>
+          <h3>Classes</h3>
+          <p className="page-subtext">Explore online and physical classes from top teachers.</p>
+        </div>
+      </div>
+      <div className="dashboard-card classes-list-card">
+        {newClasses.map((cls) => (
+          <div key={cls.id} className="class-card-item large">
+            <div>
+              <h4>{cls.title}</h4>
+              <p className="class-meta">{cls.teacher} • {cls.date} {cls.time}</p>
+            </div>
+            <button className="btn solid">View Details</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Filter classes based on search criteria
+  const getFilteredClasses = (subjectName) => {
+    const subjectClasses = groupedClasses[subjectName] || [];
+    return subjectClasses.filter(cls => {
+      const matchesSubject = !searchFilters.subject ||
+        cls.subject.toLowerCase().includes(searchFilters.subject.toLowerCase()) ||
+        cls.title.toLowerCase().includes(searchFilters.subject.toLowerCase()) ||
+        (cls.teacher?.name || '').toLowerCase().includes(searchFilters.subject.toLowerCase());
+
+      const matchesGrade = !searchFilters.grade || cls.grade === searchFilters.grade;
+      const matchesLocation = !searchFilters.location ||
+        cls.location.toLowerCase().includes(searchFilters.location.toLowerCase());
+
+      return matchesSubject && matchesGrade && matchesLocation;
+    });
+  };
+
+  const renderStreamClasses = () => (
+    <div className="dashboard-view-content premium-dashboard">
+      {/* Hero Section */}
+      <section className="hero-section premium-hero">
+        <div className="hero-content">
+          <div className="hero-main">
+            {/* Main Heading */}
+            <h1 className="hero-title">Class Details</h1>
+
+            {/* Subtitle */}
+            <p className="hero-subtitle">
+              Find online and physical classes shared by teachers across Sri Lanka. Select a subject to view class details and contact teachers directly.
+            </p>
+
+            {/* Bottom Feature Row */}
+            <div className="hero-features">
+              <div className="feature-item">
+                <div className="feature-icon">
+                  <span>🔍</span>
+                </div>
+                <div className="feature-content">
+                  <h4>Discover Classes</h4>
+                  <p>Browse classes posted by teachers</p>
+                </div>
+              </div>
+
+              <div className="feature-item">
+                <div className="feature-icon">
+                  <span>📞</span>
+                </div>
+                <div className="feature-content">
+                  <h4>Contact Directly</h4>
+                  <p>Get teacher contact information easily</p>
+                </div>
+              </div>
+
+              <div className="feature-item">
+                <div className="feature-icon">
+                  <span>🏫</span>
+                </div>
+                <div className="feature-content">
+                  <h4>Online or Physical</h4>
+                  <p>Find the right class that fits your needs</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Search and Filter Section */}
+      <section className="search-section">
+        <div className="search-container">
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="Search classes by subject, location, or teacher..."
+              value={searchFilters.subject}
+              onChange={(e) => setSearchFilters(prev => ({ ...prev, subject: e.target.value }))}
+            />
+            <button className="search-btn">🔍</button>
+          </div>
+          <div className="filter-row">
+            <select
+              value={searchFilters.grade}
+              onChange={(e) => setSearchFilters(prev => ({ ...prev, grade: e.target.value }))}
+            >
+              <option value="">All Grades</option>
+              <option value="Grade 6">Grade 6</option>
+              <option value="Grade 7">Grade 7</option>
+              <option value="Grade 8">Grade 8</option>
+              <option value="Grade 9">Grade 9</option>
+              <option value="Grade 10">Grade 10</option>
+              <option value="Grade 11">Grade 11</option>
+              <option value="A/L">A/L</option>
+              <option value="O/L">O/L</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Location (e.g., Colombo)"
+              value={searchFilters.location}
+              onChange={(e) => setSearchFilters(prev => ({ ...prev, location: e.target.value }))}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Subject Cards Grid */}
+      <section className="subjects-section">
+        <div className="subjects-grid premium-grid">
+          <div className="subject-card premium-card biology-card" onClick={() => setExpandedSubject(expandedSubject === 'Biology' ? null : 'Biology')}>
+            <div className="card-icon-area">
+              <div className="card-icon">🌿</div>
+            </div>
+            <div className="card-content">
+              <h3>Biology</h3>
+              <p className="sinhala-text">ජීව විද්‍යාව</p>
+              <p className="card-description">Study of living organisms and life processes</p>
+              <div className="class-count-badge">
+                {getFilteredClasses('Biology').length} classes available
+              </div>
+            </div>
+            <button className="card-button biology-btn">
+              View Class Details
+            </button>
+          </div>
+
+          <div className="subject-card premium-card chemistry-card" onClick={() => setExpandedSubject(expandedSubject === 'Chemistry' ? null : 'Chemistry')}>
+            <div className="card-icon-area">
+              <div className="card-icon">🧪</div>
+            </div>
+            <div className="card-content">
+              <h3>Chemistry</h3>
+              <p className="sinhala-text">රසායන විද්‍යාව</p>
+              <p className="card-description">Study of matter, its properties and reactions</p>
+              <div className="class-count-badge">
+                {getFilteredClasses('Chemistry').length} classes available
+              </div>
+            </div>
+            <button className="card-button chemistry-btn">
+              View Class Details
+            </button>
+          </div>
+
+          <div className="subject-card premium-card physics-card" onClick={() => setExpandedSubject(expandedSubject === 'Physics' ? null : 'Physics')}>
+            <div className="card-icon-area">
+              <div className="card-icon">⚛️</div>
+            </div>
+            <div className="card-content">
+              <h3>Physics</h3>
+              <p className="sinhala-text">භෞතික විද්‍යාව</p>
+              <p className="card-description">Study of matter, energy and their interactions</p>
+              <div className="class-count-badge">
+                {getFilteredClasses('Physics').length} classes available
+              </div>
+            </div>
+            <button className="card-button physics-btn">
+              View Class Details
+            </button>
+          </div>
+
+          <div className="subject-card premium-card agri-card" onClick={() => setExpandedSubject(expandedSubject === 'Agricultural Science' ? null : 'Agricultural Science')}>
+            <div className="card-icon-area">
+              <div className="card-icon">🚜</div>
+            </div>
+            <div className="card-content">
+              <h3>Agricultural Science</h3>
+              <p className="sinhala-text">කෘෂි විද්‍යාව</p>
+              <p className="card-description">Study of farming, crops and agricultural practices</p>
+              <div className="class-count-badge">
+                {getFilteredClasses('Agricultural Science').length} classes available
+              </div>
+            </div>
+            <button className="card-button agri-btn">
+              View Class Details
+            </button>
+          </div>
+
+          <div className="subject-card premium-card other-card" onClick={() => setExpandedSubject(expandedSubject === 'Other' ? null : 'Other')}>
+            <div className="card-icon-area">
+              <div className="card-icon">🌍</div>
+            </div>
+            <div className="card-content">
+              <h3>Other Classes</h3>
+              <p className="sinhala-text">වෙනත් පන්ති</p>
+              <p className="card-description">Explore classes from other streams and subjects</p>
+              <div className="class-count-badge">
+                {getFilteredClasses('Other').length} classes available
+              </div>
+            </div>
+            <button className="card-button other-btn">
+              View Other Classes
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Expanded Subject Details */}
+      {expandedSubject && expandedSubject !== 'Other' && (
+        <section className="expanded-section premium-expanded">
+          <div className="expanded-header">
+            <div className="expanded-title">
+              <h2>{expandedSubject} Class Posts</h2>
+              <p>Recent class details, materials and announcements</p>
+            </div>
+            <button className="close-btn" onClick={() => setExpandedSubject(null)}>
+              ✕
+            </button>
+          </div>
+
+          <div className="class-posts-grid premium-posts">
+            {loading ? (
+              <LoadingSpinner message="Loading class posts..." />
+            ) : error ? (
+              <ErrorMessage
+                title="Failed to load classes"
+                message={error}
+                onRetry={() => loadClassPosts(searchFilters)}
+              />
+            ) : getFilteredClasses(expandedSubject).length === 0 ? (
+              <EmptyState
+                icon="📚"
+                title="No classes found"
+                message={`No ${expandedSubject} classes match your current filters. Try adjusting your search criteria.`}
+                actionText="Clear Filters"
+                onAction={() => setSearchFilters({ subject: "", grade: "", location: "" })}
+              />
+            ) : (
+              getFilteredClasses(expandedSubject).map((cls) => (
+                <div
+                  key={cls._id}
+                  className="class-post-card premium-post"
+                  onClick={() => setSelectedClassPost(cls)}
+                >
+                  <div className="post-header">
+                    <div className="post-icon">📚</div>
+                    <div className="post-meta">
+                      <span className="post-tag">{cls.grade}</span>
+                      <span className="post-teacher">{cls.teacher?.name || 'Teacher'}</span>
+                    </div>
+                  </div>
+                  <div className="post-content">
+                    <h4>{cls.title}</h4>
+                    <p className="post-description">{cls.description}</p>
+                    <div className="post-details">
+                      <span>📍 {cls.location}</span>
+                      <span>⏰ {cls.schedule}</span>
+                      <span>💰 Rs. {cls.fee}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
+
+      {expandedSubject === 'Other' && (
+        <section className="expanded-section premium-expanded">
+          <div className="expanded-header">
+            <div className="expanded-title">
+              <h2>Other Classes</h2>
+              <p>Classes from other streams and subjects</p>
+            </div>
+            <button className="close-btn" onClick={() => setExpandedSubject(null)}>
+              ✕
+            </button>
+          </div>
+
+          <div className="class-posts-grid premium-posts">
+            {Object.keys(groupedClasses).filter(sub => !currentSubjectSet.has(sub)).map(subject => 
+              groupedClasses[subject].map(cls => (
+                <div
+                  key={cls.id}
+                  className="class-post-card premium-post other-post"
+                  onClick={() => setSelectedClassPost(cls)}
+                >
+                  <div className="post-header">
+                    <div className="post-icon">📚</div>
+                    <div className="post-meta">
+                      <span className="post-subject">{subject}</span>
+                      <span className="post-tag">{cls.tag}</span>
+                    </div>
+                  </div>
+                  <div className="post-content">
+                    <h4>{cls.title}</h4>
+                    <p className="sinhala-text">{cls.sinhala}</p>
+                    <p className="post-description">{cls.description}</p>
+                    <div className="post-details">
+                      <span>👨‍🏫 {cls.teacher}</span>
+                      <span>📅 {cls.date}</span>
+                      <span>⏰ {cls.time}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ).flat()}
+          </div>
+        </section>
+      )}
+
+      {/* Class Post Detail Modal */}
+      {selectedClassPost && (
+        <div className="modal-overlay" onClick={() => setSelectedClassPost(null)}>
+          <div className="modal-content premium-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">
+                <h3>{selectedClassPost.subject}</h3>
+                <h2>{selectedClassPost.title}</h2>
+              </div>
+              <button className="modal-close" onClick={() => setSelectedClassPost(null)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="modal-info">
+                <p className="modal-description">{selectedClassPost.description}</p>
+
+                <div className="modal-meta premium-meta">
+                  <div className="meta-item">
+                    <span className="meta-icon">👨‍🏫</span>
+                    <span>Teacher: {selectedClassPost.teacher?.name || "Teacher"}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-icon">📍</span>
+                    <span>Location: {selectedClassPost.location}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-icon">📅</span>
+                    <span>Schedule: {selectedClassPost.schedule}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-icon">⏱️</span>
+                    <span>Duration: {selectedClassPost.duration}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-icon">💰</span>
+                    <span>Fee: Rs. {selectedClassPost.fee}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-icon">📞</span>
+                    <span>Contact: {selectedClassPost.contactInfo}</span>
+                  </div>
+                  <div className="meta-item">
+                    <span className="meta-icon">🎓</span>
+                    <span>Grade: {selectedClassPost.grade}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="comments-section premium-comments">
+                <h4>💬 Contact Teacher</h4>
+                <div className="add-comment">
+                  <input
+                    type="text"
+                    placeholder="Ask a question or express interest..."
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const input = e.target;
+                        const commentText = input.value.trim();
+                        if (commentText) {
+                          submitComment(selectedClassPost._id, commentText);
+                          input.value = "";
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    className="comment-btn"
+                    onClick={(e) => {
+                      const input = e.target.previousElementSibling;
+                      const commentText = input.value.trim();
+                      if (commentText) {
+                        submitComment(selectedClassPost._id, commentText);
+                        input.value = "";
+                      }
+                    }}
+                  >
+                    Send Message
+                  </button>
+                </div>
+                <div className="contact-info">
+                  <p>💡 <strong>Tip:</strong> Teachers typically respond within 24 hours. Check your email for updates!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+  const renderPastPapers = () => (
+    <div className="dashboard-view-content">
+      <div className="section-head page-head">
+        <div>
+          <h3>Past Papers</h3>
+          <p className="page-subtext">Quick access to recent papers and practice material.</p>
+        </div>
+      </div>
+
+      <div className="dashboard-card papers-card">
+        {pastPaperItems.map((paper, index) => (
+          <div className="paper-row" key={index}>
+            <div className="paper-left">
+              <span className="paper-icon">📄</span>
+              <div>
+                <strong>{paper}</strong>
+                <p>{student.stream} stream practice resource</p>
+              </div>
+            </div>
+            <button className="btn solid sm">Open</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderSettings = () => (
+    <div className="dashboard-view-content">
+      <div className="section-head page-head">
+        <div>
+          <h3>Settings</h3>
+          <p className="page-subtext">Manage your stream, exam year, and preferences.</p>
+        </div>
+      </div>
+
+      <div className="dashboard-card settings-card-modern">
+        <form className="settings-form" onSubmit={(e) => e.preventDefault()}>
+          <div className="settings-group">
+            <label>Study Stream</label>
+            <div className="input-wrap select-wrap">
+              <select
+                value={student.stream}
+                onChange={(e) => handleUpdateProfile("stream", e.target.value)}
+              >
+                <option value="Science">Science</option>
+                <option value="Commerce">Commerce</option>
+                <option value="Arts">Arts</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <label>A/L Examination Year</label>
+            <div className="input-wrap select-wrap">
+              <select
+                value={student.alYear}
+                onChange={(e) => handleUpdateProfile("alYear", e.target.value)}
+              >
+                <option value="2026 A/L">2026 A/L</option>
+                <option value="2027 A/L">2027 A/L</option>
+                <option value="2028 A/L">2028 A/L</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <label>Full Name</label>
+            <div className="input-wrap">
+              <input
+                type="text"
+                value={student.name}
+                onChange={(e) => handleUpdateProfile("name", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="settings-group">
+            <label>Email Address</label>
+            <div className="input-wrap">
+              <input
+                type="email"
+                value={student.email}
+                onChange={(e) => handleUpdateProfile("email", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="toggle-group">
+            <div className="toggle-item">
+              <span>Dark Mode</span>
+              <input
+                type="checkbox"
+                checked={settings.darkMode}
+                onChange={() => handleToggleSetting("darkMode")}
+              />
+            </div>
+
+            <div className="toggle-item">
+              <span>Email Notifications</span>
+              <input
+                type="checkbox"
+                checked={settings.notifications}
+                onChange={() => handleToggleSetting("notifications")}
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn solid"
+            onClick={() => alert("Settings saved successfully!")}
+          >
+            Save Changes
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-topbar">
-        <div className="brand">
-          <span className="brand-mark">AL</span>
-          <span className="brand-name">Learning Hub</span>
-        </div>
-        <div className="dashboard-actions">
-          <button className="btn outline" onClick={onBackHome}>
-            Home
-          </button>
-          <button className="btn outline" onClick={onLogout}>
-            Logout
-          </button>
+    <div className={`dashboard-shell ${settings.darkMode ? "dark" : ""} ${styles.dashboardRoot}`}>
+      <header className="dashboard-header">
+        <div className="header-container">
+          <div className="brand" onClick={() => setActiveView("home")}>
+            <div className="brand-mark brand-logo-shell">
+              <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+            </div>
+            <div className="brand-copy">
+              <span className="brand-name">Learning Hub</span>
+              <small>A/L Platform</small>
+            </div>
+          </div>
+
+          <nav className={`header-nav ${showMobileMenu ? "active" : ""}`}>
+            <button className={activeView === "home" ? "active" : ""} onClick={() => {setActiveView("home"); setShowMobileMenu(false)}}>Home</button>
+            <button className={activeView === "subjects" ? "active" : ""} onClick={() => {setActiveView("subjects"); setShowMobileMenu(false)}}>Subjects</button>
+            <button className={activeView === "classes" ? "active" : ""} onClick={() => {setActiveView("classes"); setShowMobileMenu(false)}}>Classes</button>
+            <button className={activeView === "pastpapers" ? "active" : ""} onClick={() => {setActiveView("pastpapers"); setShowMobileMenu(false)}}>Past Papers</button>
+          </nav>
+
+          <div className="header-actions">
+            <button type="button" className="notification-btn" aria-label="Notifications">
+              <span className="notification-bell" aria-hidden="true"></span>
+              <span></span>
+            </button>
+            <div className="profile-menu-wrap">
+              <button
+                type="button"
+                className="profile-pill"
+                onClick={() => setShowProfileMenu((prev) => !prev)}
+              >
+                <div className="profile-avatar">{student.name.charAt(0)}</div>
+                <span className="profile-name">
+                  <strong>{student.name}</strong>
+                  <small>{student.stream} · {student.alYear}</small>
+                </span>
+                <span className="profile-chevron">⌄</span>
+              </button>
+
+              {showProfileMenu && (
+                <div className="profile-dropdown">
+                  <button
+                    type="button"
+                    className="profile-menu-item"
+                    onClick={() => {
+                      setActiveView("settings");
+                      setShowProfileMenu(false);
+                      setShowMobileMenu(false);
+                    }}
+                  >
+                    Settings
+                  </button>
+                  <button
+                    type="button"
+                    className="profile-menu-item danger"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      onLogout();
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+            <button className="menu-toggle" onClick={() => setShowMobileMenu(!showMobileMenu)}>
+              {showMobileMenu ? "✕" : "☰"}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="dashboard-main">
-        <section className="dashboard-card">
-          <h2>Student Dashboard</h2>
-          <p>Stream -> Subject -> Lesson flow with MCQ practice</p>
-
-          <div className="dashboard-select-grid">
-            <label>
-              Stream
-              <select
-                value={selectedStreamId}
-                onChange={(e) => setSelectedStreamId(e.target.value)}
-              >
-                <option value="">Select stream</option>
-                {streams.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Subject
-              <select
-                value={selectedSubjectId}
-                onChange={(e) => setSelectedSubjectId(e.target.value)}
-              >
-                <option value="">Select subject</option>
-                {subjects.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Lesson
-              <select
-                value={selectedLessonId}
-                onChange={(e) => setSelectedLessonId(e.target.value)}
-              >
-                <option value="">Select lesson</option>
-                {lessons.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
-
-        {lessonDetails ? (
-          <section className="dashboard-card">
-            <h3>{lessonDetails.title}</h3>
-            <p>{lessonDetails.description}</p>
-
-            <div className="resource-buttons">
-              <a href={lessonDetails.videoLink} target="_blank" rel="noreferrer">
-                Watch Sample Video
-              </a>
-              <a href={lessonDetails.notesUrl} target="_blank" rel="noreferrer">
-                Theory Note PDF
-              </a>
-              <a
-                href={lessonDetails.pastPaperMcqUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Past Paper MCQ
-              </a>
-              <a
-                href={lessonDetails.pastPaperStructuredUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Past Paper Structured
-              </a>
-              <a
-                href={lessonDetails.pastPaperEssayUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Past Paper Essay
-              </a>
-            </div>
-          </section>
-        ) : null}
-
-        <section className="dashboard-card">
-          <h3>Sample MCQs - Measurements</h3>
-          <p>
-            Answered: {answeredCount} / {mcqs.length}
-          </p>
-
-          {mcqs.map((mcq, index) => (
-            <div key={mcq._id} className="mcq-item">
-              <p>
-                {index + 1}. {mcq.question}
-              </p>
-              <div className="mcq-options">
-                {mcq.options.map((option, optionIndex) => (
-                  <label key={optionIndex}>
-                    <input
-                      type="radio"
-                      name={`mcq-${mcq._id}`}
-                      checked={answers[mcq._id] === optionIndex}
-                      onChange={() => selectAnswer(mcq._id, optionIndex)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {mcqs.length > 0 ? (
-            <button className="btn solid" onClick={handleSubmit}>
-              Submit Answers
-            </button>
-          ) : (
-            <p>No MCQs available for this lesson yet.</p>
-          )}
-
-          {result ? (
-            <div className="mcq-result">
-              <strong>
-                Score: {result.correctAnswers} / {result.totalQuestions} (
-                {result.scorePercent}%)
-              </strong>
-            </div>
-          ) : null}
-
-          {message ? <p className="dashboard-message">{message}</p> : null}
-        </section>
+        <div className="dashboard-container">
+            {activeView === "home" && renderCompactHome()}
+            {activeView === "subjects" && renderSubjects()}
+            {activeView === "classes" && renderStreamClasses()}
+            {activeView === "pastpapers" && renderPastPapers()}
+            {activeView === "settings" && renderSettings()}
+        </div>
       </main>
+
+      {showAiBubble && (
+        <button
+          className="ai-floating-btn"
+          onClick={() => setShowAiPanel((prev) => !prev)}
+          title="AI Assistant"
+        >
+          🤖
+        </button>
+      )}
+
+      {showAiPanel && (
+        <div className="ai-chat-panel">
+          <div className="ai-chat-head">
+            <div>
+              <strong>AI Study Assistant</strong>
+              <small>AI ඉගෙනුම් සහායකයා</small>
+            </div>
+            <button type="button" onClick={() => setShowAiPanel(false)}>×</button>
+          </div>
+          <div className="ai-chat-body">
+            <p>ආයුබෝවන්! I'm your AI Study Assistant. Ask me anything about your A/L subjects!</p>
+          </div>
+          <div className="ai-chat-input">
+            <input placeholder="Ask anything... / ප්‍රශ්නයක් අසන්න..." />
+            <button type="button">➤</button>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        .dashboard-shell {
+          min-height: 100vh;
+          background:
+            radial-gradient(circle at top left, rgba(120, 190, 255, 0.18), transparent 32%),
+            linear-gradient(180deg, #f7fbff 0%, #eef6ff 42%, #f9fcff 100%);
+          color: #14213d;
+          font-family: "Inter", Arial, sans-serif;
+        }
+
+        .dashboard-header {
+          background: rgba(255, 255, 255, 0.88);
+          border-bottom: 1px solid rgba(202, 221, 248, 0.8);
+          min-height: 84px;
+          position: sticky;
+          top: 0;
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          backdrop-filter: blur(14px);
+          box-shadow: 0 12px 30px rgba(22, 52, 99, 0.05);
+        }
+
+        .header-container {
+          width: 100%;
+          max-width: 1360px;
+          margin: 0 auto;
+          padding: 16px 34px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          cursor: pointer;
+        }
+
+        .brand-mark {
+          width: 44px;
+          height: 44px;
+          background: linear-gradient(145deg, #ffffff, #dbeafe);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          border-radius: 50%;
+          font-size: 19px;
+          box-shadow:
+            0 14px 28px rgba(37, 99, 235, 0.18),
+            inset -4px -4px 10px rgba(255, 255, 255, 0.92),
+            inset 4px 4px 12px rgba(191, 219, 254, 0.8);
+          overflow: hidden;
+        }
+
+        .brand-logo-shell {
+          padding: 4px;
+        }
+
+        .brand-logo-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
+          display: block;
+          filter: saturate(1.08) contrast(1.02);
+        }
+
+        .brand-name {
+          font-size: 20px;
+          font-weight: 800;
+          color: #2355d8;
+        }
+
+        .header-nav {
+          display: flex;
+          gap: 12px;
+          padding: 8px 10px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.66);
+          border: 1px solid rgba(218, 230, 248, 0.9);
+          box-shadow: 0 10px 24px rgba(25, 54, 101, 0.04);
+        }
+
+        .header-nav button {
+          background: none;
+          border: none;
+          padding: 10px 16px;
+          font-size: 15px;
+          font-weight: 700;
+          color: #334766;
+          cursor: pointer;
+          border-radius: 999px;
+          transition: 0.22s ease;
+        }
+
+        .header-nav button:hover {
+          background: #edf4ff;
+          color: #2563eb;
+        }
+
+        .header-nav button.active {
+          color: #2563eb;
+          background: #e9f1ff;
+          box-shadow: inset 0 -2px 0 #2563eb;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          position: relative;
+        }
+
+        .profile-menu-wrap {
+          position: relative;
+        }
+
+        .profile-pill {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: rgba(255, 255, 255, 0.88);
+          padding: 6px 14px 6px 6px;
+          border-radius: 999px;
+          cursor: pointer;
+          border: 1px solid #dbe8fb;
+          appearance: none;
+          box-shadow: 0 10px 24px rgba(20, 50, 94, 0.05);
+        }
+
+        .profile-avatar {
+          width: 36px;
+          height: 36px;
+          background: linear-gradient(135deg, #2563eb, #14b8a6);
+          color: #fff;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 14px;
+        }
+
+        .profile-name {
+          font-weight: 700;
+          font-size: 14px;
+          color: #1e293b;
+        }
+
+        .profile-dropdown {
+          position: absolute;
+          top: calc(100% + 10px);
+          right: 0;
+          min-width: 180px;
+          background: #ffffff;
+          border: 1px solid #dce8fb;
+          border-radius: 20px;
+          box-shadow: 0 22px 44px rgba(15, 23, 42, 0.14);
+          padding: 8px;
+          display: grid;
+          gap: 4px;
+          z-index: 20;
+        }
+
+        .profile-menu-item {
+          width: 100%;
+          border: none;
+          background: transparent;
+          border-radius: 12px;
+          padding: 12px 14px;
+          text-align: left;
+          font-size: 14px;
+          font-weight: 600;
+          color: #334155;
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .profile-menu-item:hover {
+          background: #f1f7ff;
+          color: #2563eb;
+        }
+
+        .profile-menu-item.danger {
+          color: #dc2626;
+        }
+
+        .profile-menu-item.danger:hover {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+
+        .menu-toggle {
+          display: none;
+          font-size: 24px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #1f3b70;
+        }
+
+        .dashboard-main {
+          padding: 34px 0 40px;
+        }
+
+        .dashboard-container {
+          max-width: 1320px;
+          margin: 0 auto;
+          padding: 0 34px;
+        }
+
+        .motivation-banner {
+          background:
+            linear-gradient(135deg, rgba(36, 99, 235, 0.96), rgba(14, 165, 233, 0.9));
+          padding: 24px 28px;
+          border-radius: 28px;
+          color: #fff;
+          margin-bottom: 26px;
+          box-shadow: 0 22px 40px rgba(37, 99, 235, 0.18);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .motivation-banner::after {
+          content: "";
+          position: absolute;
+          width: 260px;
+          height: 260px;
+          right: -100px;
+          top: -140px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.14);
+        }
+
+        .motivation-content {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .motivation-icon {
+          width: 58px;
+          height: 58px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 28px;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.18);
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+        }
+
+        .motivation-banner p {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 600;
+          line-height: 1.5;
+        }
+
+        .home-top-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 22px;
+          margin-bottom: 28px;
+        }
+
+        .dashboard-card {
+          background: rgba(255, 255, 255, 0.82);
+          padding: 24px;
+          border-radius: 28px;
+          border: 1px solid rgba(214, 227, 248, 0.9);
+          box-shadow: 0 20px 38px rgba(24, 50, 94, 0.07);
+          backdrop-filter: blur(10px);
+        }
+
+        .countdown-card,
+        .news-card,
+        .settings-card-modern,
+        .papers-card,
+        .classes-list-card {
+          position: relative;
+          overflow: hidden;
+        }
+
+        .countdown-card::before,
+        .news-card::before,
+        .settings-card-modern::before,
+        .papers-card::before,
+        .classes-list-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+        }
+
+        .countdown-card h3,
+        .news-card h3,
+        .home-section h3,
+        .page-head h3 {
+          margin: 0 0 16px;
+          font-size: 22px;
+          color: #11223f;
+          letter-spacing: -0.02em;
+        }
+
+        .days-left {
+          font-size: 28px;
+          color: #2563eb;
+          margin: 10px 0 0;
+        }
+
+        .exam-date,
+        .page-subtext,
+        .class-meta,
+        .lesson-meta,
+        .paper-left p {
+          color: #5b6d86;
+        }
+
+        .page-head {
+          margin-bottom: 22px;
+          padding: 4px 2px 0;
+        }
+
+        .news-list {
+          padding: 0;
+          list-style: none;
+          margin: 0;
+        }
+
+        .news-list li {
+          padding: 12px 0;
+          border-bottom: 1px solid #edf3fb;
+          font-size: 14px;
+          color: #475569;
+        }
+
+        .news-list li:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        .home-section {
+          margin-bottom: 34px;
+        }
+
+        .dashboard-view-content {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .lesson-cards-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 20px;
+        }
+
+        .lesson-card-item {
+          background: rgba(255, 255, 255, 0.9);
+          padding: 22px;
+          border-radius: 24px;
+          border: 1px solid #e0ecfb;
+          box-shadow: 0 18px 34px rgba(16, 38, 76, 0.06);
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .lesson-card-item:hover,
+        .class-card-item:hover,
+        .subject-card-modern-home:hover,
+        .subject-card-modern.large:hover,
+        .paper-row:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 24px 40px rgba(16, 38, 76, 0.1);
+        }
+
+        .lesson-card-item h4 {
+          margin: 0 0 8px;
+          font-size: 18px;
+          color: #14233f;
+        }
+
+        .lesson-meta {
+          font-size: 13px;
+          margin-bottom: 16px;
+        }
+
+        .lesson-progress-bar {
+          height: 10px;
+          background: #edf3fb;
+          border-radius: 999px;
+          overflow: hidden;
+          margin-bottom: 10px;
+        }
+
+        .lesson-progress-fill {
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #2563eb, #22a7f0);
+        }
+
+        .class-cards-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          gap: 18px;
+        }
+
+        .class-card-item {
+          background: rgba(255, 255, 255, 0.9);
+          padding: 18px 20px;
+          border-radius: 22px;
+          border: 1px solid #e0ecfb;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+          box-shadow: 0 16px 30px rgba(16, 38, 76, 0.05);
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .class-card-item h4 {
+          margin: 0 0 6px;
+          color: #14233f;
+        }
+
+        .class-card-item.large {
+          padding: 22px 24px;
+        }
+
+        .subject-card-grid-home {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 18px;
+        }
+
+        .subject-card-modern-home {
+          background: rgba(255, 255, 255, 0.9);
+          padding: 22px;
+          border-radius: 24px;
+          border: 1px solid #e0ecfb;
+          text-align: left;
+          box-shadow: 0 18px 34px rgba(16, 38, 76, 0.06);
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .subject-emoji {
+          width: 54px;
+          height: 54px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 26px;
+          margin-bottom: 14px;
+          border-radius: 16px;
+          background: linear-gradient(135deg, #edf4ff, #f3fbff);
+        }
+
+        .subject-card-modern-home h4,
+        .subject-card-modern.large h4 {
+          margin: 0 0 8px;
+          color: #13233f;
+          font-size: 18px;
+        }
+
+        .subject-card-modern-home p,
+        .subject-card-modern.large p {
+          margin: 0;
+          color: #60738f;
+          font-size: 14px;
+        }
+
+        .subject-progress-home {
+          height: 8px;
+          background: #edf3fb;
+          border-radius: 999px;
+          overflow: hidden;
+          margin-top: 14px;
+        }
+
+        .subject-progress-fill-home {
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #2563eb, #14b8a6);
+        }
+
+        .subject-card-grid.full {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 20px;
+        }
+
+        .subject-card-modern.large {
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid #deebfb;
+          border-radius: 26px;
+          padding: 24px;
+          box-shadow: 0 18px 34px rgba(16, 38, 76, 0.07);
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .subject-progress {
+          height: 8px;
+          background: #edf3fb;
+          border-radius: 999px;
+          overflow: hidden;
+          margin: 14px 0 18px;
+        }
+
+        .subject-progress-fill {
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #2563eb, #14b8a6);
+        }
+
+        .subject-btn {
+          width: 100%;
+        }
+
+        .settings-form {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 18px;
+        }
+
+        .settings-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .settings-group label {
+          font-weight: 700;
+          color: #22314d;
+        }
+
+        .toggle-group {
+          grid-column: span 2;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-top: 8px;
+          padding-top: 14px;
+          border-top: 1px solid #e6eefc;
+        }
+
+        .toggle-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          color: #4f5d78;
+          font-weight: 600;
+        }
+
+        .input-wrap input,
+        .input-wrap select {
+          width: 100%;
+          border: 1px solid #d6e4fb;
+          background: #f8fbff;
+          border-radius: 16px;
+          padding: 14px 16px;
+          font-size: 15px;
+          color: #20304d;
+          outline: none;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .input-wrap input:focus,
+        .input-wrap select:focus {
+          border-color: #77aaf8;
+          box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+          background: #ffffff;
+        }
+
+        .btn {
+          border: none;
+          border-radius: 999px;
+          padding: 12px 20px;
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: 0.2s ease;
+        }
+
+        .btn.solid {
+          background: linear-gradient(135deg, #2f6df6, #169de5);
+          color: white;
+          box-shadow: 0 16px 28px rgba(37, 99, 235, 0.18);
+        }
+
+        .btn.solid:hover {
+          transform: translateY(-2px);
+        }
+
+        .btn.outline {
+          background: white;
+          color: #2563eb;
+          border: 1px solid #cdddf7;
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.06);
+        }
+
+        .btn.sm {
+          padding: 10px 16px;
+          border-radius: 999px;
+        }
+
+        .papers-card {
+          display: grid;
+          gap: 14px;
+        }
+
+        .paper-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 18px 20px;
+          background: rgba(255, 255, 255, 0.88);
+          border: 1px solid #e5eefc;
+          border-radius: 22px;
+          box-shadow: 0 14px 28px rgba(16, 38, 76, 0.05);
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .paper-left {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .paper-left strong {
+          display: block;
+          margin-bottom: 4px;
+          color: #13233f;
+        }
+
+        .paper-left p {
+          margin: 0;
+          font-size: 13px;
+        }
+
+        .paper-icon {
+          width: 48px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 15px;
+          background: linear-gradient(135deg, #edf4ff, #f3fbff);
+          font-size: 22px;
+        }
+
+        .ai-floating-btn {
+          position: fixed;
+          right: 24px;
+          bottom: 24px;
+          width: 62px;
+          height: 62px;
+          border: none;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #2563eb, #14b8a6);
+          color: white;
+          font-size: 28px;
+          box-shadow: 0 20px 40px rgba(37, 99, 235, 0.28);
+          cursor: pointer;
+          z-index: 30;
+        }
+
+        .dashboard-shell {
+          background: #f7fbff;
+        }
+
+        .dashboard-header {
+          min-height: 74px;
+          background: rgba(255, 255, 255, 0.96);
+          border-bottom: 1px solid #e8eef7;
+          box-shadow: 0 8px 22px rgba(20, 42, 78, 0.04);
+        }
+
+        .header-container {
+          max-width: 1840px;
+          padding: 6px 40px;
+        }
+
+        .brand {
+          min-width: 220px;
+          gap: 12px;
+        }
+
+        .brand-mark {
+          width: 54px;
+          height: 54px;
+          border-radius: 13px;
+          background: transparent;
+          box-shadow: none;
+        }
+
+        .brand-copy {
+          display: grid;
+          gap: 3px;
+        }
+
+        .brand-name {
+          font-size: 21px;
+          line-height: 1;
+          color: #18243a;
+          letter-spacing: -0.02em;
+        }
+
+        .brand-copy small {
+          color: #2563eb;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .header-nav {
+          gap: 10px;
+          padding: 0;
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+        }
+
+        .header-nav button {
+          min-width: 88px;
+          min-height: 56px;
+          padding: 9px 16px;
+          border-radius: 18px;
+          color: #39455f;
+          font-size: 18px;
+          font-weight: 500;
+          line-height: 1.1;
+        }
+
+        .header-nav button.active {
+          color: #ffffff;
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.82), rgba(14, 165, 233, 0.64));
+          border: 1px solid rgba(255, 255, 255, 0.38);
+          box-shadow:
+            0 14px 28px rgba(37, 99, 235, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.34),
+            inset 0 -10px 20px rgba(30, 64, 175, 0.16);
+          backdrop-filter: blur(12px);
+        }
+
+        .header-nav button:hover {
+          color: #1d4ed8;
+          background: #edf4ff;
+        }
+
+        .header-nav button.active:hover {
+          color: #ffffff;
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.88), rgba(14, 165, 233, 0.7));
+        }
+
+        .notification-btn {
+          position: relative;
+          width: 46px;
+          height: 46px;
+          border: 1px solid #e4ebf5;
+          border-radius: 50%;
+          background: #f8fbff;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .notification-bell {
+          position: relative;
+          width: 16px;
+          height: 17px;
+          border: 2px solid #42526a;
+          border-bottom: 0;
+          border-radius: 9px 9px 4px 4px;
+        }
+
+        .notification-bell::before {
+          content: "";
+          position: absolute;
+          left: 50%;
+          top: -5px;
+          width: 5px;
+          height: 5px;
+          border: 2px solid #42526a;
+          border-bottom: 0;
+          border-radius: 999px 999px 0 0;
+          transform: translateX(-50%);
+        }
+
+        .notification-bell::after {
+          content: "";
+          position: absolute;
+          left: 50%;
+          bottom: -5px;
+          width: 7px;
+          height: 4px;
+          border-radius: 0 0 999px 999px;
+          background: #42526a;
+          transform: translateX(-50%);
+        }
+
+        .notification-btn > span:last-child {
+          position: absolute;
+          top: 8px;
+          right: 10px;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #ef4444;
+        }
+
+        .profile-pill {
+          min-width: 230px;
+          height: 50px;
+          padding: 5px 12px 5px 6px;
+          border: 1px solid #e3ebf6;
+          background: #f8fbff;
+          box-shadow: none;
+        }
+
+        .profile-avatar {
+          width: 36px;
+          height: 36px;
+          background: #2f8df2;
+        }
+
+        .profile-name {
+          display: grid;
+          gap: 2px;
+          text-align: left;
+          min-width: 0;
+        }
+
+        .profile-name strong {
+          color: #1f2937;
+          font-size: 15px;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .profile-name small {
+          color: #65738a;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1;
+        }
+
+        .profile-chevron {
+          margin-left: auto;
+          color: #9aa7b8;
+        }
+
+        .dashboard-main {
+          padding: 30px 0 52px;
+        }
+
+        .dashboard-container {
+          max-width: 1670px;
+          padding: 0 36px;
+        }
+
+        .compact-dashboard {
+          display: grid;
+          gap: 28px;
+        }
+
+        .compact-dashboard .motivation-banner {
+          min-height: 210px;
+          margin: 0;
+          padding: 40px;
+          border-radius: 16px;
+          background:
+            linear-gradient(120deg, rgba(37, 79, 208, 0.88) 0%, rgba(8, 127, 183, 0.78) 100%),
+            url("/cover-pic.png") center / cover no-repeat;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
+          box-shadow: 0 20px 48px rgba(25, 72, 158, 0.18);
+        }
+
+        .compact-dashboard .motivation-banner::after {
+          display: none;
+        }
+
+        .compact-dashboard .motivation-content {
+          gap: 12px;
+          align-items: flex-start;
+        }
+
+        .compact-dashboard .motivation-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 9px;
+          font-size: 22px;
+          background: rgba(255, 255, 255, 0.14);
+          flex: 0 0 auto;
+        }
+
+        .hero-greeting {
+          margin: 8px 0 22px;
+          font-size: 17px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+        }
+
+        .compact-dashboard .motivation-banner h2 {
+          margin: 0 0 10px;
+          font-size: 30px;
+          line-height: 1.2;
+          letter-spacing: -0.03em;
+        }
+
+        .sinhala-line {
+          margin: 0;
+          font-size: 19px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.86);
+        }
+
+        .hero-count-box {
+          width: 135px;
+          min-height: 114px;
+          padding: 18px 12px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          background: rgba(255, 255, 255, 0.12);
+          text-align: center;
+          color: #ffffff;
+        }
+
+        .hero-count-box strong {
+          display: block;
+          font-size: 38px;
+          line-height: 1;
+        }
+
+        .hero-count-box span,
+        .hero-count-box small {
+          display: block;
+          margin-top: 6px;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .home-top-grid {
+          grid-template-columns: minmax(360px, 0.86fr) minmax(600px, 1.8fr);
+          gap: 24px;
+          margin: 0;
+        }
+
+        .dashboard-card,
+        .lesson-card-item,
+        .class-card-item,
+        .subject-card-modern-home,
+        .summary-card {
+          border: 1px solid #e4edf8;
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow: 0 12px 32px rgba(20, 42, 78, 0.04);
+        }
+
+        .compact-card {
+          padding: 22px 20px;
+        }
+
+        .card-title-row,
+        .section-topline,
+        .lesson-card-top,
+        .class-card-top,
+        .mini-progress-row {
+          display: flex;
+          align-items: center;
+        }
+
+        .card-title-row {
+          gap: 12px;
+        }
+
+        .section-topline {
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+
+        .section-topline h3,
+        .card-title-row h3 {
+          margin: 0;
+          color: #071225;
+          font-size: 21px;
+          line-height: 1.1;
+        }
+
+        .section-subtitle,
+        .lesson-sinhala {
+          margin: 6px 0 0;
+          color: #8793a8;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        .mini-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          font-weight: 800;
+          flex: 0 0 auto;
+        }
+
+        .mini-icon.blue { color: #2f6df6; background: #eef5ff; }
+        .mini-icon.green { color: #07945f; background: #eefbf5; }
+        .mini-icon.teal { color: #0b9886; background: #edfbf8; }
+        .mini-icon.orange { color: #ea940d; background: #fff8e7; }
+        .mini-icon.purple { color: #7c3aed; background: #f3efff; }
+        .mini-icon.sky { color: #0895d1; background: #eaf8ff; }
+
+        .view-all-btn {
+          border: 0;
+          background: transparent;
+          color: #1d4ed8;
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .countdown-number {
+          margin: 18px 0;
+          min-height: 130px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #2f6df6, #13a2e5);
+          color: #ffffff;
+          display: grid;
+          place-items: center;
+          align-content: center;
+        }
+
+        .countdown-number strong {
+          font-size: 62px;
+          line-height: 1;
+        }
+
+        .countdown-number span {
+          margin-top: 8px;
+          font-size: 17px;
+          font-weight: 800;
+        }
+
+        .detail-list {
+          display: grid;
+          gap: 10px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid #edf2f7;
+        }
+
+        .detail-list p {
+          display: flex;
+          justify-content: space-between;
+          gap: 18px;
+          margin: 0;
+          color: #65738a;
+          font-size: 15px;
+        }
+
+        .detail-list strong {
+          color: #1f2937;
+        }
+
+        .mini-progress-row {
+          justify-content: space-between;
+          margin-top: 12px;
+          color: #65738a;
+          font-size: 14px;
+        }
+
+        .mini-progress-row strong {
+          color: #1f2937;
+        }
+
+        .thin-progress,
+        .lesson-progress-bar,
+        .subject-progress-home {
+          height: 7px;
+          border-radius: 999px;
+          overflow: hidden;
+          background: #eef3f8;
+        }
+
+        .countdown-card .thin-progress {
+          margin-top: 10px;
+        }
+
+        .thin-progress span,
+        .lesson-progress-fill,
+        .subject-progress-fill-home {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: #3b82f6;
+        }
+
+        .compact-news-list {
+          display: grid;
+          gap: 14px;
+        }
+
+        .news-item {
+          min-height: 110px;
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 16px;
+          align-items: center;
+          padding: 16px;
+          border: 1px solid #edf2f7;
+          border-radius: 12px;
+          background: #f9fbfd;
+        }
+
+        .news-icon {
+          width: 46px;
+          height: 46px;
+          border: 1px solid #e1e8f2;
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          background: #ffffff;
+        }
+
+        .news-item h4 {
+          margin: 0;
+          color: #111827;
+          font-size: 18px;
+        }
+
+        .news-item p {
+          margin: 6px 0 0;
+          color: #67758b;
+          font-size: 14px;
+        }
+
+        .tag-line {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 8px;
+        }
+
+        .tag-line span {
+          padding: 4px 11px;
+          border-radius: 999px;
+          background: #e8f1ff;
+          color: #2563eb;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .tag-line small {
+          color: #95a1b2;
+        }
+
+        .home-section {
+          margin: 0;
+        }
+
+        .lesson-cards-grid,
+        .class-cards-list {
+          grid-template-columns: repeat(3, minmax(260px, 1fr));
+          gap: 20px;
+        }
+
+        .lesson-card-item,
+        .class-card-item {
+          display: block;
+          min-height: 264px;
+          padding: 24px;
+        }
+
+        .lesson-card-top,
+        .class-card-top {
+          justify-content: space-between;
+          margin-bottom: 18px;
+        }
+
+        .lesson-card-top small,
+        .class-card-top small {
+          padding: 5px 12px;
+          border-radius: 999px;
+          background: #f0f4f8;
+          color: #7b8799;
+          font-weight: 800;
+        }
+
+        .lesson-card-item h4,
+        .class-card-item h4 {
+          margin: 0 0 6px;
+          color: #071225;
+          font-size: 19px;
+        }
+
+        .lesson-meta,
+        .class-meta {
+          margin: 8px 0 0;
+          color: #67758b;
+          font-size: 15px;
+        }
+
+        .lesson-card-item .btn,
+        .class-card-item .btn {
+          width: 100%;
+          min-height: 44px;
+          margin-top: 16px;
+          border-radius: 10px;
+          font-size: 15px;
+        }
+
+        .lesson-card-item.green .lesson-progress-fill,
+        .class-card-item.green .btn,
+        .subject-card-modern-home.green .subject-progress-fill-home {
+          background: #0aa36d;
+        }
+
+        .lesson-card-item.teal .lesson-progress-fill,
+        .class-card-item.teal .btn,
+        .subject-card-modern-home.teal .subject-progress-fill-home {
+          background: #12a79a;
+        }
+
+        .class-card-item.purple .btn,
+        .subject-card-modern-home.purple .subject-progress-fill-home {
+          background: #7c3aed;
+        }
+
+        .subject-card-modern-home.orange .subject-progress-fill-home {
+          background: #f59e0b;
+        }
+
+        .subject-card-modern-home.sky .subject-progress-fill-home {
+          background: #0ea5e9;
+        }
+
+        .subject-card-grid-home {
+          grid-template-columns: repeat(5, minmax(180px, 1fr));
+          gap: 20px;
+        }
+
+        .subject-card-modern-home {
+          min-height: 236px;
+          padding: 20px;
+          text-align: center;
+        }
+
+        .subject-emoji {
+          width: 60px;
+          height: 60px;
+          margin: 0 auto 18px;
+          border-radius: 14px;
+          font-size: 24px;
+        }
+
+        .subject-card-modern-home h4 {
+          font-size: 16px;
+        }
+
+        .subject-card-modern-home p {
+          font-size: 13px;
+        }
+
+        .lesson-count {
+          display: block;
+          margin-top: 14px;
+          color: #94a3b8;
+          font-size: 13px;
+        }
+
+        .summary-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(190px, 1fr));
+          gap: 20px;
+        }
+
+        .summary-card {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          column-gap: 14px;
+          align-items: center;
+          padding: 22px;
+        }
+
+        .summary-card span {
+          grid-row: span 3;
+          width: 50px;
+          height: 50px;
+          border-radius: 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: #eef5ff;
+          color: #2563eb;
+          font-size: 24px;
+        }
+
+        .summary-card strong {
+          color: #0f172a;
+          font-size: 30px;
+          line-height: 1;
+        }
+
+        .summary-card p,
+        .summary-card small {
+          margin: 0;
+          color: #667085;
+          font-weight: 700;
+        }
+
+        .classes-group-stack {
+          display: grid;
+          gap: 20px;
+        }
+
+        .class-subject-group {
+          padding: 20px;
+        }
+
+        .class-post-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 16px;
+        }
+
+        .class-post-card {
+          border: 1px solid #e5edf7;
+          border-radius: 14px;
+          background: #fbfdff;
+          padding: 18px;
+          text-align: left;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .class-post-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 14px 28px rgba(20, 42, 78, 0.08);
+        }
+
+        .class-post-card.relevant {
+          border-color: #cfe0fb;
+          background: #f8fbff;
+        }
+
+        .class-post-top,
+        .class-detail-head,
+        .class-detail-meta {
+          display: flex;
+          align-items: center;
+        }
+
+        .class-post-top {
+          justify-content: space-between;
+          margin-bottom: 14px;
+        }
+
+        .class-post-top small {
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: #eef3f8;
+          color: #708199;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .class-post-card h4 {
+          margin: 0 0 6px;
+          color: #0f172a;
+          font-size: 17px;
+        }
+
+        .class-detail-post {
+          margin-top: 20px;
+          padding: 22px 24px;
+        }
+
+        .class-detail-head {
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 16px;
+        }
+
+        .class-detail-subject {
+          margin: 0 0 8px;
+          color: #2563eb;
+          font-size: 13px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+
+        .class-detail-head h3 {
+          margin: 0 0 6px;
+          color: #0f172a;
+          font-size: 24px;
+        }
+
+        .class-detail-copy {
+          margin: 16px 0;
+          color: #475569;
+          line-height: 1.7;
+        }
+
+        .class-detail-meta {
+          flex-wrap: wrap;
+          gap: 10px 16px;
+          color: #64748b;
+          font-size: 14px;
+        }
+
+        .ai-floating-btn {
+          width: 70px;
+          height: 70px;
+          right: 28px;
+          bottom: 28px;
+          background: #1689e8;
+          font-size: 30px;
+        }
+
+        .ai-chat-panel {
+          position: fixed;
+          right: 28px;
+          bottom: 112px;
+          width: min(400px, calc(100vw - 36px));
+          height: 402px;
+          border-radius: 16px;
+          overflow: hidden;
+          background: #f8fafc;
+          border: 1px solid #dbe6f4;
+          box-shadow: 0 24px 54px rgba(15, 23, 42, 0.18);
+          z-index: 35;
+        }
+
+        .ai-chat-head {
+          height: 70px;
+          padding: 16px 18px;
+          background: linear-gradient(135deg, #2371e8, #0ea5e9);
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .ai-chat-head strong,
+        .ai-chat-head small {
+          display: block;
+        }
+
+        .ai-chat-head button {
+          border: 0;
+          background: transparent;
+          color: #ffffff;
+          font-size: 22px;
+          cursor: pointer;
+        }
+
+        .ai-chat-body {
+          padding: 16px;
+        }
+
+        .ai-chat-body p {
+          margin: 0;
+          padding: 14px 16px;
+          border: 1px solid #e3eaf5;
+          border-radius: 12px;
+          background: #ffffff;
+          color: #334155;
+          line-height: 1.55;
+        }
+
+        .ai-chat-input {
+          position: absolute;
+          left: 16px;
+          right: 16px;
+          bottom: 16px;
+          display: flex;
+          gap: 10px;
+        }
+
+        .ai-chat-input input {
+          flex: 1;
+          height: 42px;
+          border: 1px solid #dbe6f4;
+          border-radius: 10px;
+          padding: 0 14px;
+        }
+
+        .ai-chat-input button {
+          width: 42px;
+          border: 0;
+          border-radius: 10px;
+          background: #2563eb;
+          color: #ffffff;
+          cursor: pointer;
+        }
+
+        @media (max-width: 900px) {
+          .header-nav {
+            display: none;
+          }
+
+          .header-nav.active {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 20px;
+            right: 20px;
+            width: auto;
+            background: rgba(255, 255, 255, 0.96);
+            padding: 14px;
+            border: 1px solid #dce8fb;
+            border-radius: 22px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+          }
+
+          .header-nav button {
+            width: 100%;
+            text-align: left;
+            border-radius: 14px;
+          }
+
+          .menu-toggle {
+            display: block;
+          }
+
+          .profile-name {
+            display: none;
+          }
+
+          .home-top-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .settings-form {
+            grid-template-columns: 1fr;
+          }
+
+          .toggle-group {
+            grid-column: span 1;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .header-container,
+          .dashboard-container {
+            padding-left: 18px;
+            padding-right: 18px;
+          }
+
+          .motivation-content {
+            align-items: flex-start;
+          }
+
+          .class-card-item,
+          .paper-row {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          .class-card-item .btn,
+          .paper-row .btn {
+            width: 100%;
+          }
+
+          .motivation-banner p {
+            font-size: 15px;
+          }
+
+          .lesson-cards-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .subject-card-grid.full,
+          .subject-card-grid-home {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   );
 }

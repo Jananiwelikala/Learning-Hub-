@@ -51,4 +51,51 @@ router.get("/:id", auth, roleMiddleware(["student", "teacher", "admin"]), async 
   }
 });
 
+/**
+ * PROTECTED
+ * GET /api/lessons/by-subject/:subjectId
+ * Returns all lessons for a subject with full details (for learning area)
+ */
+router.get("/by-subject/:subjectId", auth, roleMiddleware(["student", "teacher", "admin"]), async (req, res) => {
+  try {
+    const { subjectId } = req.params;
+
+    const lessons = await Lesson.find({ subject: subjectId })
+      .populate("subject", "name stream")
+      .populate({
+        path: "subject",
+        populate: { path: "stream", select: "name" }
+      })
+      .sort({ createdAt: 1 });
+
+    res.json(lessons);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * PROTECTED
+ * GET /api/lessons/:lessonId/full
+ * Returns complete lesson data with all resources and metadata
+ */
+router.get("/:lessonId/full", auth, roleMiddleware(["student", "teacher", "admin"]), async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+
+    const lesson = await Lesson.findById(lessonId)
+      .populate("subject")
+      .populate({
+        path: "subject",
+        populate: { path: "stream", select: "name" }
+      });
+
+    if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+
+    res.json(lesson);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

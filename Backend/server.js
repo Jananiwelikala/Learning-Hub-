@@ -15,20 +15,54 @@ const roleMiddleware = require("./Middleware/roleMiddleware");
 
 const streamRoutes = require("./routes/streamRoutes");
 const subjectRoutes = require("./routes/subjectRoutes");
+const classPostRoutes = require("./routes/classPostRoutes");
+const commentRoutes = require("./routes/commentRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 
 const app = express();
 const PUBLIC_REGISTER_ROLES = ["student", "teacher"];
 
-// Global middleware for CORS and JSON request bodies.
-app.use(cors());
+// CORS configuration for development and production
+const corsOptions = {
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+      'http://localhost:3004',
+      'http://localhost:3005',
+      'http://localhost:3006',
+      'http://localhost:3007',
+      'http://localhost:3008',
+      'http://localhost:3009',
+      'http://localhost:3010',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Feature routes (auth checks are handled inside each route file where needed).
 app.use("/api/streams", streamRoutes);
 app.use("/api/subjects", subjectRoutes);
+app.use("/api/class-posts", classPostRoutes);
+app.use("/api/comments", commentRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/mcqs", mcqRoutes);
 app.use("/api/assessments", assessmentRoutes);
+app.use("/api/chat", chatRoutes);
 
 // Quick health endpoint for uptime checks.
 app.get("/health", (req, res) => res.send("OK"));
@@ -36,9 +70,10 @@ app.get("/health", (req, res) => res.send("OK"));
 // Register a new user.
 app.post("/api/register", async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, phone, streamId, password, role } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedName = String(name || "").trim();
+    const normalizedPhone = String(phone || "").trim();
     const selectedRole = String(role || "student").trim().toLowerCase();
 
     if (!normalizedName || !normalizedEmail || !password) {
@@ -63,14 +98,31 @@ app.post("/api/register", async (req, res) => {
     // Store only hashed passwords.
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await User.create({
+    const createdUser = await User.create({
       name: normalizedName,
       email: normalizedEmail,
+      phone: normalizedPhone,
+      streamId: streamId || null,
       password: hashedPassword,
       role: selectedRole,
     });
 
-    res.status(201).json({ message: "User registered successfully" });
+    const token = jwt.sign(
+      { id: createdUser._id, role: createdUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.status(201).json({
+      message: "User registered successfully",
+      token,
+      user: {
+        id: createdUser._id,
+        name: createdUser.name,
+        email: createdUser.email,
+        role: createdUser.role,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -191,4 +243,3 @@ mongoose
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => console.error("MongoDB connection error:", err));
-
