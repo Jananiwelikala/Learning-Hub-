@@ -30,13 +30,13 @@ function SubjectDetail({ token, subjectId, subjectName, streamName, onBack, onSe
   const progressPercentage = 0; // TODO: Calculate from student attempts
 
   if (loading) {
-    return <LoadingSpinner message="Loading lessons..." />;
+    return <LoadingSpinner message="පාඩම් load වෙමින් පවතී..." />;
   }
 
   if (error) {
     return (
       <ErrorMessage
-        title="Failed to load lessons"
+        title="පාඩම් load කිරීමට නොහැකි විය"
         message={error}
         onRetry={loadLessons}
       />
@@ -48,7 +48,7 @@ function SubjectDetail({ token, subjectId, subjectName, streamName, onBack, onSe
       {/* Subject Header */}
       <header className="subject-header">
         <button className="back-btn" onClick={onBack}>
-          ← Back to Subjects
+          ← විෂය තෝරන්න
         </button>
         <div className="subject-info">
           <div>
@@ -79,19 +79,19 @@ function SubjectDetail({ token, subjectId, subjectName, streamName, onBack, onSe
               </svg>
               <span className="progress-text">{progressPercentage}%</span>
             </div>
-            <p className="progress-label">Progress</p>
+            <p className="progress-label">ඔබේ ප්‍රගතිය</p>
           </div>
         </div>
       </header>
 
       {/* Lessons Section */}
       <section className="lessons-section">
-        <h2>Lessons ({lessons.length})</h2>
+        <h2>පාඩම් බලන්න ({lessons.length})</h2>
         
         {lessons.length === 0 ? (
           <EmptyState
-            title="No lessons yet"
-            message="Your teacher hasn't created any lessons for this subject yet."
+            title="පාඩම් තවම නැහැ"
+            message="මෙම විෂය සඳහා පාඩම් ඉක්මනින් එකතු වේ."
           />
         ) : (
           <div className="lessons-grid">
@@ -121,23 +121,23 @@ function SubjectDetail({ token, subjectId, subjectName, streamName, onBack, onSe
                 <div className="lesson-resources">
                   {lesson.videoLink && (
                     <span className="resource-badge">
-                      🎥 Video
+                      Video පාඩම
                     </span>
                   )}
                   {lesson.notesUrl && (
                     <span className="resource-badge">
-                      📄 Notes
+                      සටහන්
                     </span>
                   )}
                   {(lesson.pastPaperMcqUrl || lesson.pastPaperStructuredUrl || lesson.pastPaperEssayUrl) && (
                     <span className="resource-badge">
-                      ❓ Questions
+                      MCQ පුහුණුව
                     </span>
                   )}
                 </div>
                 
                 <button className="lesson-start-btn">
-                  Start Learning →
+                  පාඩම් බලන්න →
                 </button>
               </div>
             ))}

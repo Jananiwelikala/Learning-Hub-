@@ -10,7 +10,9 @@ function AboutUs({
     <div className="home">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">AL</span>
+          <span className="brand-mark brand-logo-shell">
+            <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+          </span>
           <span className="brand-name">Learning Hub</span>
         </div>
 

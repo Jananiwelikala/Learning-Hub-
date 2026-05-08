@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import styles from "./StudentDashboard.module.css";
-import { getApprovedPosts, createComment } from "./api";
+import { getApprovedPosts, createComment, getStudentSubjects, getStudentLessons, getSubjects } from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
 import EmptyState from "./components/EmptyState";
@@ -10,10 +10,20 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [activeView, setActiveView] = useState("home");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [selectedClassPost, setSelectedClassPost] = useState(null);
+  const [selectedNews, setSelectedNews] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedLearningLesson, setSelectedLearningLesson] = useState(null);
+  const [selectedPaperYear, setSelectedPaperYear] = useState(2024);
+  const [selectedPaperType, setSelectedPaperType] = useState("mcq");
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [classPosts, setClassPosts] = useState([]);
+  const [studentSubjectRecords, setStudentSubjectRecords] = useState([]);
+  const [studentLessonRecords, setStudentLessonRecords] = useState([]);
+  const [lessonLoading, setLessonLoading] = useState(false);
+  const [lessonError, setLessonError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchFilters, setSearchFilters] = useState({
@@ -44,7 +54,18 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   // Load approved class posts on component mount
   useEffect(() => {
     loadClassPosts();
+    loadStudentSubjects();
   }, []);
+
+  async function loadStudentSubjects() {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const result = await getStudentSubjects(token);
+    if (result.success) {
+      setStudentSubjectRecords(result.data?.subjects || []);
+    }
+  }
 
   async function loadClassPosts(filters = {}) {
     setLoading(true);
@@ -64,8 +85,8 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     loadClassPosts(searchFilters);
   }, [searchFilters]);
 
-  const motivationText = "Stay focused. Small daily progress leads to big A/L results.";
-  const motivationSinhala = "සෑම දිනකම කරන කුඩා ප්‍රගතිය A/L සාර්ථකත්වයට මග පෙන්වයි.";
+  const motivationText = "ඔබේ A/L ඉගෙනුම් ගමන අදත් ඉදිරියට ගෙන යමු";
+  const motivationSinhala = "ඉගෙනීම එකම තැනකින්. ඔබේ විභාග සූදානම වැඩි කරගන්න.";
   const alExamDate = new Date("2026-11-25"); // Sample A/L Exam Date
   const today = new Date();
   const daysLeft = Math.ceil((alExamDate - today) / (1000 * 60 * 60 * 24));
@@ -77,6 +98,10 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       sinhala: "2026 A/L කාලසටහන ලබන මාසයේ නිකුත් වේ",
       tag: "Exam",
       date: "Apr 20, 2026",
+      details:
+        "The official 2026 A/L timetable is expected soon. Students should keep revision plans flexible and continue covering syllabus units while waiting for the confirmed dates.",
+      sinhalaDetails:
+        "2026 A/L කාලසටහන ඉදිරියේදී නිකුත් වීමට නියමිතයි. නිල දිනයන් එන තුරු syllabus පාඩම් සහ revision සැලැස්ම අඛණ්ඩව කරගෙන යන්න.",
     },
     {
       id: 2,
@@ -84,6 +109,10 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       sinhala: "විද්‍යා ධාරා සංශෝධන සම්මන්ත්‍රණයක් 2026 මැයි මසදී",
       tag: "Seminar",
       date: "Apr 18, 2026",
+      details:
+        "A revision seminar for science stream students is planned for May 2026. Focus areas include Physics, Chemistry and Biology theory recap with past paper practice.",
+      sinhalaDetails:
+        "විද්‍යා ධාරා සිසුන් සඳහා මැයි 2026 සංශෝධන සම්මන්ත්‍රණයක් සැලසුම් කර ඇත. Physics, Chemistry, Biology theory සහ past paper practice ප්‍රධාන කරුණු වේ.",
     },
     {
       id: 3,
@@ -91,8 +120,104 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       sinhala: "දෙපාර්තමේන්තුව 2026 සඳහා නවතම මාර්ගෝපදේශ නිකුත් කරයි",
       tag: "Update",
       date: "Apr 15, 2026",
+      details:
+        "Updated past paper guidance helps students understand how to practice recent papers, identify weak areas and improve answer timing before the A/L exam.",
+      sinhalaDetails:
+        "නව past paper මාර්ගෝපදේශයෙන් ප්‍රශ්න පත්‍ර පුහුණුව, දුර්වල තැන් හඳුනාගැනීම සහ answer timing වැඩි දියුණු කරගැනීමට උදව් වේ.",
+    },
+    {
+      id: 4,
+      title: "Biology practical revision notes updated",
+      sinhala: "Biology practical revision සටහන් යාවත්කාලීන කර ඇත",
+      tag: "Biology",
+      date: "Apr 12, 2026",
+      details:
+        "New Biology practical revision notes are available with diagrams, key observations and common exam-style questions for quick practice.",
+      sinhalaDetails:
+        "Biology practical සඳහා diagrams, observations සහ exam-style questions ඇතුළත් නව revision සටහන් දැන් ලබාගත හැක.",
+    },
+    {
+      id: 5,
+      title: "Combined Maths model paper discussion added",
+      sinhala: "Combined Maths model paper සාකච්ඡාවක් එක් කර ඇත",
+      tag: "Maths",
+      date: "Apr 10, 2026",
+      details:
+        "A new Combined Maths model paper discussion is added to help students improve problem-solving speed and identify repeated question patterns.",
+      sinhalaDetails:
+        "Combined Maths model paper discussion එකෙන් problem-solving speed වැඩි කරගැනීමට සහ නැවත නැවත එන question patterns හඳුනාගැනීමට උදව් වේ.",
+    },
+    {
+      id: 6,
+      title: "Chemistry organic reactions short notes released",
+      sinhala: "Chemistry organic reactions කෙටි සටහන් නිකුත් කර ඇත",
+      tag: "Chemistry",
+      date: "Apr 08, 2026",
+      details:
+        "Short notes for organic reaction mechanisms are now available with summary tables and important conversion paths.",
+      sinhalaDetails:
+        "Organic reaction mechanisms සඳහා summary tables සහ වැදගත් conversion paths ඇතුළත් කෙටි සටහන් දැන් ලබාගත හැක.",
+    },
+    {
+      id: 7,
+      title: "Physics mechanics MCQ practice set updated",
+      sinhala: "Physics mechanics MCQ පුහුණු ප්‍රශ්න යාවත්කාලීන කර ඇත",
+      tag: "Physics",
+      date: "Apr 05, 2026",
+      details:
+        "The mechanics MCQ practice set now includes more exam-focused questions with instant answer checking and feedback.",
+      sinhalaDetails:
+        "Mechanics MCQ set එකට exam-focused questions වැඩි කර ඇති අතර instant answer checking සහ feedback ලබාගත හැක.",
+    },
+    {
+      id: 8,
+      title: "Accounting final accounts revision class announced",
+      sinhala: "Accounting final accounts revision පන්තියක් නිවේදනය කර ඇත",
+      tag: "Commerce",
+      date: "Apr 02, 2026",
+      details:
+        "A focused revision class for final accounts has been announced for commerce students preparing for the 2026 A/L exam.",
+      sinhalaDetails:
+        "2026 A/L සඳහා සූදානම් වන Commerce සිසුන්ට final accounts පිළිබඳ focused revision පන්තියක් නිවේදනය කර ඇත.",
     },
   ];
+
+  const isRecentNotification = (dateValue, days = 30) => {
+    if (!dateValue) return false;
+    const timestamp = new Date(dateValue).getTime();
+    if (Number.isNaN(timestamp)) return false;
+    return Date.now() - timestamp <= days * 24 * 60 * 60 * 1000;
+  };
+
+  const classUpdateCount = classPosts.filter((post) =>
+    isRecentNotification(post.updatedAt || post.createdAt)
+  ).length;
+  const subjectUpdateCount = latestNews.filter((item) => item.tag === "Update").length;
+  const notificationItems = [
+    ...classPosts
+      .filter((post) => isRecentNotification(post.updatedAt || post.createdAt))
+      .slice(0, 5)
+      .map((post) => ({
+        id: `class-${post._id || post.id}`,
+        type: "Class Update",
+        title: post.title || "New class details updated",
+        text: `${post.subject || "Subject"} class details updated`,
+        date: post.updatedAt || post.createdAt,
+      })),
+    ...latestNews
+      .filter((item) => item.tag === "Update")
+      .map((item) => ({
+        id: `subject-${item.id}`,
+        type: "Subject Update",
+        title: item.title,
+        text: item.sinhala || "Subject details updated",
+        date: item.date,
+      })),
+  ];
+  const notificationCount = settings.notifications
+    ? classUpdateCount + subjectUpdateCount
+    : 0;
+  const notificationBadgeText = notificationCount > 99 ? "99+" : String(notificationCount);
 
   const ongoingLessons = [
     {
@@ -220,57 +345,149 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   };
 
   const streamSubjectMap = {
-    "Bio Science": [
-      { name: "Biology", sinhala: "ජීව විද්‍යාව", progress: 75, icon: "◇", lessons: "32 lessons", completed: "24/32", color: "teal" },
-      { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
-      { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
-      { name: "Agricultural Science", sinhala: "කෘෂි විද්‍යාව", progress: 40, icon: "⌁", lessons: "20 lessons", completed: "8/20", color: "orange" },
-    ],
-    "Physical Science": [
-      { name: "Combined Mathematics", sinhala: "සංයුක්ත ගණිතය", progress: 35, icon: "▦", lessons: "40 lessons", completed: "14/40", color: "orange" },
-      { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
-      { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
-      { name: "ICT", sinhala: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", progress: 90, icon: "▭", lessons: "18 lessons", completed: "16/18", color: "sky" },
-    ],
-    Commerce: [
-      { name: "Accounting", sinhala: "ගිණුම්කරණය", progress: 64, icon: "▣", lessons: "22 lessons", completed: "14/22", color: "green" },
-      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
-      { name: "Business Studies", sinhala: "ව්‍යාපාර අධ්‍යයනය", progress: 70, icon: "▦", lessons: "26 lessons", completed: "18/26", color: "blue" },
-      { name: "ICT", sinhala: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", progress: 61, icon: "▭", lessons: "18 lessons", completed: "11/18", color: "sky" },
-      { name: "Business Statistics", sinhala: "ව්‍යාපාර සංඛ්‍යානය", progress: 42, icon: "▥", lessons: "20 lessons", completed: "8/20", color: "purple" },
-    ],
-    Arts: [
-      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
-      { name: "Geography", sinhala: "භූගෝල විද්‍යාව", progress: 63, icon: "◎", lessons: "20 lessons", completed: "13/20", color: "green" },
-      { name: "History", sinhala: "ඉතිහාසය", progress: 60, icon: "▤", lessons: "20 lessons", completed: "12/20", color: "orange" },
-      { name: "Logic", sinhala: "තර්ක ශාස්ත්‍රය", progress: 57, icon: "◇", lessons: "18 lessons", completed: "10/18", color: "purple" },
-      { name: "Media", sinhala: "මාධ්‍ය අධ්‍යයනය", progress: 52, icon: "▧", lessons: "18 lessons", completed: "9/18", color: "sky" },
-      { name: "Political Science", sinhala: "දේශපාලන විද්‍යාව", progress: 66, icon: "▥", lessons: "24 lessons", completed: "16/24", color: "blue" },
-      { name: "Art / Dancing / Music", sinhala: "චිත්‍ර / නර්තනය / සංගීතය", progress: 46, icon: "✎", lessons: "18 lessons", completed: "8/18", color: "teal" },
-    ],
-    Technology: [
-      { name: "Engineering Technology", sinhala: "ඉංජිනේරු තාක්ෂණවේදය", progress: 54, icon: "▦", lessons: "26 lessons", completed: "14/26", color: "blue" },
-      { name: "Bio-systems Technology", sinhala: "ජෛව පද්ධති තාක්ෂණවේදය", progress: 49, icon: "◇", lessons: "24 lessons", completed: "12/24", color: "teal" },
-      { name: "Science for Technology", sinhala: "තාක්ෂණවේදය සඳහා විද්‍යාව", progress: 68, icon: "△", lessons: "28 lessons", completed: "19/28", color: "green" },
-      { name: "ICT", sinhala: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", progress: 61, icon: "▭", lessons: "18 lessons", completed: "11/18", color: "sky" },
-      { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", progress: 58, icon: "◇", lessons: "24 lessons", completed: "14/24", color: "orange" },
-      { name: "Agricultural Science", sinhala: "කෘෂි විද්‍යාව", progress: 40, icon: "⌁", lessons: "20 lessons", completed: "8/20", color: "purple" },
-    ],
+    "Bio Science": {
+      title: "Biology Stream",
+      sinhala: "ජීව විද්‍යා ධාරාව",
+      icon: "♙",
+      color: "green",
+      subjects: [
+        { name: "Biology", sinhala: "ජීව විද්‍යාව", icon: "♧", papers: 45, students: 1200, color: "green" },
+        { name: "Chemistry", sinhala: "රසායන විද්‍යාව", icon: "⚗", papers: 42, students: 1150, color: "green" },
+        { name: "Physics", sinhala: "භෞතික විද්‍යාව", icon: " ", papers: 40, students: 1100, color: "green" },
+      ],
+    },
+    "Physical Science": {
+      title: "Mathematics Stream",
+      sinhala: "ගණිත ධාරාව",
+      icon: "▦",
+      color: "blue",
+      subjects: [
+        { name: "Combined Mathematics", sinhala: "ඒකාබද්ධ ගණිතය", icon: "▦", papers: 50, students: 980, color: "blue" },
+        { name: "Physics", sinhala: "භෞතික විද්‍යාව", icon: " ", papers: 40, students: 950, color: "blue" },
+        { name: "Chemistry", sinhala: "රසායන විද්‍යාව", icon: "⚗", papers: 42, students: 920, color: "blue" },
+      ],
+    },
+    Commerce: {
+      title: "Commerce Stream",
+      sinhala: "වාණිජ ධාරාව",
+      icon: "▥",
+      color: "orange",
+      subjects: [
+        { name: "Accounting", sinhala: "ගිණුම්කරණය", icon: "⊙", papers: 38, students: 850, color: "orange" },
+        { name: "Business Studies", sinhala: "ව්‍යාපාර අධ්‍යයනය", icon: "▤", papers: 35, students: 820, color: "orange" },
+        { name: "Economics", sinhala: "ආර්ථික විද්‍යාව", icon: "⌁", papers: 36, students: 800, color: "orange" },
+      ],
+    },
+    Arts: {
+      title: "Arts Stream",
+      sinhala: "කලා ධාරාව",
+      icon: "▯",
+      color: "purple",
+      subjects: [
+        { name: "Sinhala", sinhala: "සිංහල", icon: "文", papers: 32, students: 750, color: "purple" },
+        { name: "History", sinhala: "ඉතිහාසය", icon: "▤", papers: 30, students: 720, color: "purple" },
+        { name: "Geography", sinhala: "භූගෝල විද්‍යාව", icon: "◔", papers: 28, students: 700, color: "purple" },
+      ],
+    },
+    Technology: {
+      title: "Technology Stream",
+      sinhala: "තාක්ෂණවේදය ධාරාව",
+      icon: "⚙",
+      color: "teal",
+      subjects: [
+        { name: "Science for Technology", sinhala: "තාක්ෂණවේදය සඳහා විද්‍යාව", icon: "⚗", papers: 34, students: 780, color: "teal" },
+        { name: "Engineering Technology", sinhala: "ඉංජිනේරු තාක්ෂණවේදය", icon: "⚒", papers: 31, students: 700, color: "teal" },
+        { name: "Bio-systems Technology", sinhala: "ජෛව පද්ධති තාක්ෂණවේදය", icon: "♧", papers: 30, students: 690, color: "teal" },
+      ],
+    },
   };
 
-  const selectedStream =
-    streamSubjectMap[student.stream] ? student.stream :
-    student.stream === "Science" ? "Bio Science" :
-    "Bio Science";
-  const baseSubjects = streamSubjectMap[selectedStream];
-  const currentSubjects = selectedStream === "Bio Science" ? [
-    { name: "Biology", sinhala: "ජීව විද්‍යාව", progress: 75, icon: "◇", lessons: "32 lessons", completed: "24/32", color: "teal" },
-    { name: "Chemistry", sinhala: "රසායන විද්‍යාව", progress: 48, icon: "△", lessons: "28 lessons", completed: "13/28", color: "green" },
-    { name: "Physics", sinhala: "භෞතික විද්‍යාව", progress: 62, icon: "Ω", lessons: "24 lessons", completed: "15/24", color: "blue" },
-    { name: "Agricultural Science", sinhala: "කෘෂි විද්‍යාව", progress: 40, icon: "⌁", lessons: "20 lessons", completed: "8/20", color: "orange" },
-  ] : baseSubjects;
+  const selectedStream = streamSubjectMap[student.stream]
+    ? student.stream
+    : student.stream === "Science"
+      ? "Bio Science"
+      : "Bio Science";
+  const currentStream = streamSubjectMap[selectedStream];
+  const normalizeName = (value) => String(value || "").trim().toLowerCase();
+  const findStudentSubjectRecord = (subjectName) =>
+    studentSubjectRecords.find((record) => normalizeName(record.name) === normalizeName(subjectName));
+  const currentSubjects = currentStream.subjects.map((subject) => {
+    const record = findStudentSubjectRecord(subject.name);
+    return {
+      ...subject,
+      id: record?._id || record?.id,
+      dbSubject: record || null,
+      sinhala: record?.sinhalaName || subject.sinhala,
+      papers: record?.papersCount ?? subject.papers,
+      students: record?.studentsCount ?? subject.students,
+      icon: record?.icon || subject.icon,
+      color: record?.color || subject.color,
+    };
+  });
   const currentSubjectNames = currentSubjects.map((subject) => subject.name).join(", ");
   const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
+  const getYoutubeEmbedUrl = (url) => {
+    if (!url) return "https://www.youtube.com/embed/URUJD5NEXC8";
+    const text = String(url);
+    const watchMatch = text.match(/[?&]v=([^&]+)/);
+    if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}`;
+    const shortMatch = text.match(/youtu\.be\/([^?]+)/);
+    if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
+    return text;
+  };
+  const lessonIconMap = {
+    "book-open": "▯",
+    book: "▯",
+    flask: "△",
+    microscope: "♙",
+    leaf: "♧",
+    dna: "♢",
+  };
+  const dbLessonCards = studentLessonRecords.map((lesson, index) => ({
+    id: lesson._id || lesson.id || `${lesson.title}-${index}`,
+    title: lesson.title,
+    sinhala: lesson.sinhalaTitle || lesson.description || "",
+    icon: lessonIconMap[lesson.icon] || lesson.icon || "▯",
+    progress: lesson.progressPercent ?? 0,
+    videos: lesson.videoCount ?? (lesson.videoLink ? 1 : 0),
+    notes: lesson.notesCount ?? 0,
+    papers: lesson.pastPaperCount ?? 0,
+    duration: lesson.durationMinutes || 45,
+    views: lesson.viewCount ? Number(lesson.viewCount).toLocaleString() : "0",
+    updated: lesson.updatedLabel || (lesson.createdAt ? new Date(lesson.createdAt).toLocaleDateString() : "Recently"),
+    videoUrl: getYoutubeEmbedUrl(lesson.videoLink),
+    rawLesson: lesson,
+  }));
+  const selectedLessonCards = dbLessonCards;
+  const selectedLessonStats = selectedLessonCards.reduce(
+    (total, lesson) => ({
+      videos: total.videos + Number(lesson.videos || 0),
+      notes: total.notes + Number(lesson.notes || 0),
+      papers: total.papers + Number(lesson.papers || 0),
+    }),
+    { videos: 0, notes: 0, papers: 0 }
+  );
+  const lessonNotes = [
+    { title: "Cell Structure and Function", pages: 24, size: "2.4 MB" },
+    { title: "Cell Division - Mitosis and Meiosis", pages: 18, size: "1.8 MB" },
+    { title: "Cell Membrane Transport", pages: 15, size: "1.5 MB" },
+  ];
+  const paperYears = [2024, 2023, 2022, 2021, 2020];
+  const paperTypeLabels = { mcq: "MCQ", structured: "Structured", essay: "Essay" };
+  const currentPapers = [
+    {
+      title: `${paperTypeLabels[selectedPaperType]} Paper - Part A`,
+      questions: selectedPaperType === "mcq" ? 40 : 5,
+      duration: selectedPaperType === "mcq" ? 60 : 90,
+      difficulty: "Medium",
+    },
+    {
+      title: `${paperTypeLabels[selectedPaperType]} Paper - Part B`,
+      questions: selectedPaperType === "mcq" ? 40 : 5,
+      duration: selectedPaperType === "mcq" ? 60 : 90,
+      difficulty: "Hard",
+    },
+  ];
   const homeLessons = [...ongoingLessons, ...extraLessons]
     .filter((lesson) => currentSubjectSet.has(lesson.subject))
     .slice(0, 3);
@@ -345,11 +562,92 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     }
   }
 
+  async function handleSelectSubject(subject) {
+    let subjectForLessons = subject;
+    setSelectedLearningLesson(null);
+    setStudentLessonRecords([]);
+    setLessonError("");
+
+    if (!subjectForLessons?.id) {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const freshSubjects = await getStudentSubjects(token);
+        if (freshSubjects.success) {
+          const records = freshSubjects.data?.subjects || [];
+          setStudentSubjectRecords(records);
+          const matchedRecord = records.find((record) => normalizeName(record.name) === normalizeName(subject.name));
+          if (matchedRecord) {
+            subjectForLessons = {
+              ...subject,
+              id: matchedRecord._id || matchedRecord.id,
+              dbSubject: matchedRecord,
+              sinhala: matchedRecord.sinhalaName || subject.sinhala,
+              papers: matchedRecord.papersCount ?? subject.papers,
+              students: matchedRecord.studentsCount ?? subject.students,
+              icon: matchedRecord.icon || subject.icon,
+              color: matchedRecord.color || subject.color,
+            };
+          }
+        }
+      }
+    }
+
+    if (!subjectForLessons?.id) {
+      const publicSubjects = await getSubjects();
+      if (publicSubjects.success) {
+        const matchedRecord = (publicSubjects.subjects || []).find((record) =>
+          normalizeName(record.name) === normalizeName(subject.name) &&
+          normalizeName(record.stream?.name) === normalizeName(selectedStream)
+        );
+        if (matchedRecord) {
+          subjectForLessons = {
+            ...subject,
+            id: matchedRecord._id || matchedRecord.id,
+            dbSubject: matchedRecord,
+            sinhala: matchedRecord.sinhalaName || subject.sinhala,
+            papers: matchedRecord.papersCount ?? subject.papers,
+            students: matchedRecord.studentsCount ?? subject.students,
+            icon: matchedRecord.icon || subject.icon,
+            color: matchedRecord.color || subject.color,
+          };
+        }
+      }
+    }
+
+    setSelectedSubject(subjectForLessons);
+
+    if (!subjectForLessons?.id) {
+      setLessonError("This subject is not linked with the database yet. Please check the Biology subject in MongoDB.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setLessonError("Please login again to load lessons.");
+      return;
+    }
+
+    setLessonLoading(true);
+    const result = await getStudentLessons(token, subjectForLessons.id);
+    if (result.success) {
+      setStudentLessonRecords(result.lessons || []);
+    } else {
+      setLessonError(result.error || "Failed to load lessons.");
+    }
+    setLessonLoading(false);
+  }
+
   function handleUpdateProfile(key, value) {
     setStudent(prev => ({
       ...prev,
       [key]: value
     }));
+    if (key === "stream") {
+      setSelectedSubject(null);
+      setSelectedLearningLesson(null);
+      setStudentLessonRecords([]);
+      loadStudentSubjects();
+    }
   }
 
   // Kept as a fallback while the compact dashboard design is active.
@@ -365,23 +663,27 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
       <div className="home-top-grid">
         <div className="dashboard-card countdown-card">
-          <h3>A/L Exam Countdown</h3>
+          <h3>ඔබේ විභාග සූදානම</h3>
           <p className="exam-date">Date: {alExamDate.toDateString()}</p>
           <p className="days-left"><strong>{daysLeft}</strong> Days Left</p>
         </div>
 
         <div className="dashboard-card news-card">
-          <h3>Latest A/L News</h3>
+          <h3>නවතම A/L පුවත්</h3>
           <ul className="news-list">
             {latestNews.map((news) => (
-              <li key={news.id}>{news.title}</li>
+              <li key={news.id}>
+                <button type="button" onClick={() => setSelectedNews(news)}>
+                  {news.title}
+                </button>
+              </li>
             ))}
           </ul>
         </div>
       </div>
 
       <section className="home-section">
-        <h3>Ongoing Lessons</h3>
+        <h3>අද ඉගෙනගන්න පාඩම්</h3>
           <div className="lesson-cards-grid">
             {ongoingLessons.map((lesson) => (
               <div key={lesson.id} className="lesson-card-item">
@@ -401,7 +703,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       </section>
 
       <section className="home-section">
-        <h3>New Class Details</h3>
+        <h3>ඔබට ගැළපෙන පන්ති</h3>
           <div className="class-cards-list">
             {newClasses.map((cls) => (
               <div key={cls.id} className="class-card-item">
@@ -416,7 +718,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       </section>
 
       <section className="home-section">
-        <h3>Active Subjects</h3>
+        <h3>විෂය තෝරන්න</h3>
           <div className="subject-card-grid-home">
             {currentSubjects.map((subject) => (
               <div key={subject.name} className="subject-card-modern-home">
@@ -442,14 +744,14 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <div className="motivation-content">
           <div className="motivation-icon">☀</div>
           <div>
-            <p className="hero-greeting">Good Morning, Janani! ✨</p>
+            <p className="hero-greeting">ආයුබෝවන්, Janani!</p>
             <h2>{motivationText}</h2>
             <p className="sinhala-line">{motivationSinhala}</p>
           </div>
         </div>
         <div className="hero-count-box">
           <strong>{daysLeft}</strong>
-          <span>Days to A/L</span>
+          <span>A/L සඳහා දින</span>
           <small>A/L සඳහා දින</small>
         </div>
       </div>
@@ -459,7 +761,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <div className="card-title-row">
             <span className="mini-icon blue">⏱</span>
             <div>
-              <h3>A/L Exam Countdown</h3>
+              <h3>ඔබේ විභාග සූදානම</h3>
               <p className="section-subtitle">A/L විභාග ගණනය</p>
             </div>
           </div>
@@ -473,7 +775,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <p><span>Subjects</span><strong>{currentSubjectNames}</strong></p>
           </div>
           <div className="mini-progress-row">
-            <span>Overall Preparation</span>
+            <span>ඔබේ ප්‍රගතිය</span>
             <strong>58%</strong>
           </div>
           <div className="thin-progress"><span style={{ width: "58%" }}></span></div>
@@ -484,16 +786,20 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <div className="card-title-row">
               <span className="mini-icon orange">▤</span>
               <div>
-                <h3>Latest A/L News</h3>
+                <h3>නවතම A/L පුවත්</h3>
                 <p className="section-subtitle">නවතම A/L පුවත්</p>
               </div>
             </div>
-            <button type="button" className="view-all-btn">View All</button>
           </div>
 
           <div className="news-list compact-news-list">
             {latestNews.map((news) => (
-              <div className="news-item" key={news.id}>
+              <button
+                type="button"
+                className="news-item"
+                key={news.id}
+                onClick={() => setSelectedNews(news)}
+              >
                 <span className="news-icon">▣</span>
                 <div>
                   <h4>{news.title}</h4>
@@ -504,7 +810,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                   </div>
                 </div>
                 <strong>›</strong>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -513,8 +819,8 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <section className="home-section">
         <div className="section-topline">
           <div>
-            <h3>Ongoing Lessons</h3>
-            <p className="section-subtitle">දැනට කරගෙන යන පාඩම්</p>
+            <h3>අද ඉගෙනගන්න පාඩම්</h3>
+            <p className="section-subtitle">පාඩම් බලන්න</p>
           </div>
           <button type="button" className="view-all-btn">View All</button>
         </div>
@@ -535,7 +841,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
               <div className="lesson-progress-bar">
                 <div className="lesson-progress-fill" style={{ width: `${lesson.progress}%` }}></div>
               </div>
-              <button className="btn solid sm">Continue / ඉදිරියට</button>
+              <button className="btn solid sm">පාඩම් බලන්න</button>
             </div>
           ))}
         </div>
@@ -544,7 +850,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <section className="home-section">
         <div className="section-topline">
           <div>
-            <h3>New Class Details</h3>
+            <h3>ඔබට ගැළපෙන පන්ති</h3>
             <p className="section-subtitle">නව පන්ති විස්තර</p>
           </div>
           <button type="button" className="view-all-btn">View All</button>
@@ -571,7 +877,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <section className="home-section">
         <div className="section-topline">
           <div>
-            <h3>Active Subjects</h3>
+            <h3>විෂය තෝරන්න</h3>
             <p className="section-subtitle">සක්‍රීය විෂයන්</p>
           </div>
           <button type="button" className="view-all-btn">View All</button>
@@ -583,55 +889,232 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
               <h4>{subject.name}</h4>
               <p>{subject.sinhala}</p>
               <div className="mini-progress-row">
-                <small>{subject.completed}</small>
-                <strong>{subject.progress}%</strong>
+                <small>{subject.papers} Papers</small>
+                <strong>{subject.progress || 0}%</strong>
               </div>
               <div className="subject-progress-home">
-                <div className="subject-progress-fill-home" style={{ width: `${subject.progress}%` }}></div>
+                <div className="subject-progress-fill-home" style={{ width: `${subject.progress || 0}%` }}></div>
               </div>
-              <small className="lesson-count">{subject.lessons}</small>
+              <small className="lesson-count">{subject.students} Students</small>
             </div>
           ))}
         </div>
       </section>
 
       <div className="summary-grid">
-        <div className="summary-card"><span>▯</span><strong>82</strong><p>Lessons Completed</p><small>සම්පූර්ණ කළ පාඩම්</small></div>
-        <div className="summary-card"><span>▤</span><strong>34</strong><p>Papers Practiced</p><small>ප්‍රශ්න පත්‍ර පුහුණුව</small></div>
+        <div className="summary-card"><span>▯</span><strong>82</strong><p>පාඩම් බලන්න</p><small>සම්පූර්ණ කළ පාඩම්</small></div>
+        <div className="summary-card"><span>▤</span><strong>34</strong><p>පසුගිය ප්‍රශ්න පත්‍ර</p><small>ප්‍රශ්න පත්‍ර පුහුණුව</small></div>
         <div className="summary-card"><span>◷</span><strong>126</strong><p>Study Hours</p><small>අධ්‍යයන පැය</small></div>
         <div className="summary-card"><span>◎</span><strong>74%</strong><p>Average Score</p><small>සාමාන්‍ය ලකුණු</small></div>
       </div>
     </div>
   );
 
-  const renderSubjects = () => (
-    <div className="dashboard-view-content">
-      <div className="section-head page-head">
+  const renderLearningLesson = () => (
+    <div className="dashboard-view-content lesson-resource-view">
+      <div className="lesson-resource-hero">
+        <div className="subject-stream-icon green">{selectedLearningLesson.icon}</div>
         <div>
-          <h3>My Subjects</h3>
-          <p className="page-subtext">Subjects based on your selected stream: {student.stream}</p>
+          <h2>{selectedLearningLesson.title}</h2>
+          <p>{selectedLearningLesson.sinhala}</p>
+          <small>Biology • Biology Stream</small>
+        </div>
+        <button type="button" className="btn outline" onClick={() => setSelectedLearningLesson(null)}>
+          Back to Lessons
+        </button>
+      </div>
+
+      <section className="resource-panel video-resource-panel">
+        <div className="resource-title-row">
+          <span className="resource-icon video">▹</span>
+          <h3>Video Lesson • වීඩියෝ පාඩම</h3>
+        </div>
+        <div className="video-frame">
+          <iframe
+            title={`${selectedLearningLesson.title} video`}
+            src={selectedLearningLesson.videoUrl}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          ></iframe>
+        </div>
+        <div className="video-meta-row">
+          <span>◷ Duration: {selectedLearningLesson.duration} min</span>
+          <span>◎ {selectedLearningLesson.views} views</span>
+          <span>□ Updated: {selectedLearningLesson.updated}</span>
+        </div>
+      </section>
+
+      <section className="resource-panel">
+        <div className="resource-title-row">
+          <span className="resource-icon notes">▤</span>
+          <h3>Downloadable Notes • බාගත කළ හැකි සටහන්</h3>
+        </div>
+        <div className="notes-resource-grid">
+          {lessonNotes.map((note) => (
+            <article className="note-resource-card" key={note.title}>
+              <span>▤</span>
+              <div>
+                <h4>{note.title}</h4>
+                <p>□ {note.pages} pages &nbsp; ⊕ {note.size}</p>
+              </div>
+              <button type="button">↓ Download PDF</button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="resource-panel">
+        <div className="resource-title-row">
+          <span className="resource-icon papers">▥</span>
+          <h3>Past Papers • පසුගිය ප්‍රශ්න පත්‍ර</h3>
+        </div>
+        <div className="paper-selector">
+          <strong>Select Year • වර්ෂය තෝරන්න</strong>
+          <div className="paper-year-row">
+            {paperYears.map((year) => (
+              <button
+                type="button"
+                className={selectedPaperYear === year ? "active" : ""}
+                onClick={() => setSelectedPaperYear(year)}
+                key={year}
+              >
+                {year}
+              </button>
+            ))}
+          </div>
+          <div className="paper-type-tabs">
+            {Object.entries(paperTypeLabels).map(([type, label]) => (
+              <button
+                type="button"
+                className={selectedPaperType === type ? "active" : ""}
+                onClick={() => setSelectedPaperType(type)}
+                key={type}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="paper-resource-grid">
+          {currentPapers.map((paper) => (
+            <article className="paper-resource-card" key={paper.title}>
+              <div className="paper-card-head">
+                <h4>{paper.title}</h4>
+                <span className={paper.difficulty === "Hard" ? "hard" : ""}>{paper.difficulty}</span>
+              </div>
+              <p>ⓘ {paper.questions} Questions &nbsp; ◷ {paper.duration} min</p>
+              <div className="paper-actions">
+                <button type="button" className="start">⊙ Start</button>
+                <button type="button" className="pdf">↓ PDF</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderSubjectOverview = () => selectedLearningLesson ? renderLearningLesson() : (
+    <div className="dashboard-view-content">
+      <div className="subject-detail-hero">
+        <div className={`subject-stream-icon ${selectedSubject?.color || "green"}`}>
+          {selectedSubject?.icon || "♧"}
+        </div>
+        <div>
+          <div className="subject-title-row">
+            <h2>{selectedSubject?.name}</h2>
+            <span>Active</span>
+          </div>
+          <p>{selectedSubject?.sinhala}</p>
+          <small>□ {currentStream.title} • {currentStream.sinhala}</small>
+        </div>
+        <div className="subject-detail-actions">
+          <button
+            type="button"
+            className="btn outline"
+            onClick={() => {
+              setSelectedSubject(null);
+              setSelectedLearningLesson(null);
+              setStudentLessonRecords([]);
+              setLessonError("");
+            }}
+          >
+            Back
+          </button>
+          <button type="button" className="btn solid" onClick={() => setActiveView("home")}>Dashboard</button>
         </div>
       </div>
 
-      <div className="subject-card-grid full">
+      <div className="subject-stat-grid">
+        <div className="subject-stat-card"><span>▯</span><strong>{selectedLessonCards.length}</strong><p>Lessons</p></div>
+        <div className="subject-stat-card"><span>▹</span><strong>{selectedLessonStats.videos}</strong><p>Videos</p></div>
+        <div className="subject-stat-card"><span>▤</span><strong>{selectedLessonStats.notes}</strong><p>Notes</p></div>
+        <div className="subject-stat-card"><span>▥</span><strong>{selectedLessonStats.papers}</strong><p>Past Papers</p></div>
+      </div>
+
+      <section className="biology-lessons-section">
+        <h3>Lessons • පාඩම්</h3>
+        {lessonLoading && <LoadingSpinner message="Loading lessons..." />}
+        {lessonError && <ErrorMessage message={lessonError} />}
+        {!lessonLoading && !lessonError && selectedLessonCards.length === 0 && (
+          <EmptyState title="No lessons yet" message="Add lessons in MongoDB for this subject to show them here." />
+        )}
+        <div className="biology-lesson-grid">
+          {!lessonLoading && !lessonError && selectedLessonCards.map((lesson) => (
+            <article className="biology-lesson-card" key={lesson.id || lesson.title}>
+              <div className="lesson-card-topline">
+                <span className="bio-lesson-icon">{lesson.icon}</span>
+                <strong>{lesson.progress}% Complete</strong>
+              </div>
+              <h4>{lesson.title}</h4>
+              <p>{lesson.sinhala}</p>
+              <div className="biology-progress"><span style={{ width: `${lesson.progress}%` }}></span></div>
+              <div className="biology-counts">
+                <span>▹ {lesson.videos}</span>
+                <span>▤ {lesson.notes}</span>
+                <span>▥ {lesson.papers}</span>
+              </div>
+              <button type="button" className="btn solid" onClick={() => setSelectedLearningLesson(lesson)}>
+                Start Learning →
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+
+  const renderSubjects = () => selectedSubject ? renderSubjectOverview() : (
+    <div className="dashboard-view-content">
+      <div className="stream-subject-head">
+        <div className={`stream-head-icon ${currentStream.color}`}>{currentStream.icon}</div>
+        <div>
+          <h2>{currentStream.title}</h2>
+          <p>{currentStream.sinhala}</p>
+        </div>
+      </div>
+
+      <div className="stream-subject-grid">
         {currentSubjects.map((subject) => (
-          <div key={subject.name} className="subject-card-modern large">
-            <div className="subject-emoji">{subject.icon}</div>
-            <h4>{subject.name}</h4>
-            <p>{subject.progress}% completed</p>
-            <div className="subject-progress">
-              <div
-                className="subject-progress-fill"
-                style={{ width: `${subject.progress}%` }}
-              ></div>
+          <article key={subject.name} className="stream-subject-card">
+            <div className="subject-card-topline">
+              <span className={`subject-square-icon ${subject.color}`}>{subject.icon}</span>
+              <strong>Available</strong>
             </div>
-            <button className="btn solid subject-btn">Open Subject</button>
-          </div>
+            <h4>{subject.name}</h4>
+            <p>{subject.sinhala}</p>
+            <div className="subject-meta-row">
+              <span>▤ {subject.papers} Papers</span>
+              <span>♙ {subject.students} Students</span>
+            </div>
+            <button type="button" className="btn solid subject-btn" onClick={() => handleSelectSubject(subject)}>
+              View Lessons
+            </button>
+          </article>
         ))}
       </div>
     </div>
   );
-
   // Legacy classes renderer kept as fallback.
   // eslint-disable-next-line no-unused-vars
   const renderClasses = () => (
@@ -1051,7 +1534,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     <div className="dashboard-view-content">
       <div className="section-head page-head">
         <div>
-          <h3>Past Papers</h3>
+          <h3>පසුගිය ප්‍රශ්න පත්‍ර</h3>
           <p className="page-subtext">Quick access to recent papers and practice material.</p>
         </div>
       </div>
@@ -1091,9 +1574,11 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                 value={student.stream}
                 onChange={(e) => handleUpdateProfile("stream", e.target.value)}
               >
-                <option value="Science">Science</option>
+                <option value="Bio Science">Bio Science</option>
+                <option value="Physical Science">Physical Science</option>
                 <option value="Commerce">Commerce</option>
                 <option value="Arts">Arts</option>
+                <option value="Technology">Technology</option>
               </select>
             </div>
           </div>
@@ -1188,15 +1673,76 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           </nav>
 
           <div className="header-actions">
-            <button type="button" className="notification-btn" aria-label="Notifications">
-              <span className="notification-bell" aria-hidden="true"></span>
-              <span></span>
+            <button
+              type="button"
+              className="notification-btn"
+              onClick={() => {
+                setShowNotifications((prev) => !prev);
+                setShowProfileMenu(false);
+              }}
+              aria-label={
+                notificationCount > 0
+                  ? `${notificationCount} notifications`
+                  : "Notifications"
+              }
+            >
+              <img src="/bell.png" alt="" className="notification-bell-image" aria-hidden="true" />
+              {notificationCount > 0 && (
+                <span className="notification-count">{notificationBadgeText}</span>
+              )}
             </button>
+            {showNotifications && (
+              <div className="notification-panel">
+                <div className="notification-panel-header">
+                  <div>
+                    <h3>Notifications</h3>
+                    <p>පන්ති සහ විෂය updates</p>
+                  </div>
+                  <span>{notificationBadgeText}</span>
+                </div>
+
+                <div className="notification-list">
+                  {notificationCount > 0 ? (
+                    notificationItems.map((item) => (
+                      <button
+                        type="button"
+                        className="notification-item"
+                        key={item.id}
+                        onClick={() => {
+                          if (item.type === "Class Update") {
+                            setActiveView("classes");
+                          } else {
+                            setActiveView("subjects");
+                          }
+                          setShowNotifications(false);
+                          setShowMobileMenu(false);
+                        }}
+                      >
+                        <span className="notification-item-dot"></span>
+                        <span className="notification-item-copy">
+                          <strong>{item.title}</strong>
+                          <small>{item.text}</small>
+                        </span>
+                        <em>{item.type}</em>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="notification-empty">
+                      <strong>No new notifications</strong>
+                      <span>අලුත් updates නැහැ</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="profile-menu-wrap">
               <button
                 type="button"
                 className="profile-pill"
-                onClick={() => setShowProfileMenu((prev) => !prev)}
+                onClick={() => {
+                  setShowProfileMenu((prev) => !prev);
+                  setShowNotifications(false);
+                }}
               >
                 <div className="profile-avatar">{student.name.charAt(0)}</div>
                 <span className="profile-name">
@@ -1249,6 +1795,48 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         </div>
       </main>
 
+      <footer className="site-footer student-footer">
+        <div className="footer-grid">
+          <div>
+            <div className="brand footer-brand">
+              <span className="brand-mark brand-logo-shell">
+                <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+              </span>
+              <span className="brand-name">Learning Hub</span>
+            </div>
+            <p>AI-powered learning platform for Sri Lankan G.C.E. Advanced Level students.</p>
+            <p className="footer-accent">උසස් පෙළ ඉගෙනීම එකම තැනකින්</p>
+          </div>
+          <div>
+            <h4>Learn</h4>
+            <ul>
+              <li>Video lessons</li>
+              <li>Notes</li>
+              <li>Past papers</li>
+              <li>MCQ practice</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Platform</h4>
+            <ul>
+              <li>AI chatbot</li>
+              <li>Progress tracking</li>
+              <li>Teacher classes</li>
+              <li>Admin approval</li>
+            </ul>
+          </div>
+          <div>
+            <h4>Contact</h4>
+            <ul>
+              <li>info@learninghub.lk</li>
+              <li>+94 11 234 5678</li>
+            </ul>
+          </div>
+        </div>
+        <div className="footer-divider" />
+        <p className="footer-copy">© 2026 Learning Hub. All rights reserved.</p>
+      </footer>
+
       {showAiBubble && (
         <button
           className="ai-floating-btn"
@@ -1263,17 +1851,42 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <div className="ai-chat-panel">
           <div className="ai-chat-head">
             <div>
-              <strong>AI Study Assistant</strong>
-              <small>AI ඉගෙනුම් සහායකයා</small>
+              <strong>AI සහාය ලබාගන්න</strong>
+              <small>ඔබේ දුර්වල තැන් හඳුනාගන්න</small>
             </div>
             <button type="button" onClick={() => setShowAiPanel(false)}>×</button>
           </div>
           <div className="ai-chat-body">
-            <p>ආයුබෝවන්! I'm your AI Study Assistant. Ask me anything about your A/L subjects!</p>
+            <p>ආයුබෝවන්! ඔබේ A/L විෂයන් ගැන අහන්න. ඔබේ දුර්වල තැන් හඳුනාගන්න මම උදව් කරන්නම්.</p>
           </div>
           <div className="ai-chat-input">
             <input placeholder="Ask anything... / ප්‍රශ්නයක් අසන්න..." />
             <button type="button">➤</button>
+          </div>
+        </div>
+      )}
+      {selectedNews && (
+        <div className="modal-overlay news-modal-overlay" onClick={() => setSelectedNews(null)}>
+          <div className="modal-content news-detail-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header news-detail-header">
+              <div className="modal-title">
+                <span className="news-detail-tag">{selectedNews.tag}</span>
+                <h2>{selectedNews.title}</h2>
+                <p>{selectedNews.date}</p>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setSelectedNews(null)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body news-detail-body">
+              <p className="news-detail-sinhala">{selectedNews.sinhala}</p>
+              <p>{selectedNews.details}</p>
+              <div className="news-detail-note">
+                <strong>සිසුන් සඳහා</strong>
+                <span>{selectedNews.sinhalaDetails}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1629,6 +2242,21 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .news-list li:last-child {
           border-bottom: none;
           padding-bottom: 0;
+        }
+
+        .news-list li button {
+          width: 100%;
+          border: 0;
+          background: transparent;
+          padding: 0;
+          color: inherit;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .news-list li button:hover {
+          color: #4C1D95;
         }
 
         .home-section {
@@ -2091,16 +2719,242 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           transform: translateX(-50%);
         }
 
-        .notification-btn > span:last-child {
-          position: absolute;
-          top: 8px;
-          right: 10px;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: #ef4444;
+        .notification-bell-image {
+          width: 22px;
+          height: 22px;
+          display: block;
+          object-fit: contain;
         }
 
+        .notification-count {
+          position: absolute;
+          top: 3px;
+          right: 3px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: #ef4444;
+          color: #ffffff;
+          border: 2px solid #ffffff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: 800;
+          line-height: 1;
+          box-shadow: 0 8px 14px rgba(239, 68, 68, 0.24);
+        }
+
+        .notification-panel {
+          position: absolute;
+          top: calc(100% + 12px);
+          right: 0;
+          width: min(360px, calc(100vw - 32px));
+          background: rgba(255, 255, 255, 0.96);
+          border: 1px solid rgba(124, 58, 237, 0.14);
+          border-radius: 22px;
+          box-shadow: 0 24px 56px rgba(76, 29, 149, 0.18);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          padding: 14px;
+          z-index: 1200;
+        }
+
+        .notification-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          padding: 8px 8px 12px;
+          border-bottom: 1px solid rgba(124, 58, 237, 0.12);
+        }
+
+        .notification-panel-header h3 {
+          margin: 0;
+          color: #1E1B4B;
+          font-size: 18px;
+          line-height: 1.1;
+        }
+
+        .notification-panel-header p {
+          margin: 4px 0 0;
+          color: #6d5d86;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .notification-panel-header > span {
+          min-width: 30px;
+          height: 30px;
+          padding: 0 9px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #7C3AED, #C084FC);
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .notification-list {
+          display: grid;
+          gap: 8px;
+          padding-top: 10px;
+          max-height: 340px;
+          overflow: auto;
+        }
+
+        .notification-item {
+          width: 100%;
+          border: 0;
+          border-radius: 16px;
+          background: transparent;
+          display: grid;
+          grid-template-columns: 10px 1fr auto;
+          align-items: center;
+          gap: 10px;
+          padding: 11px 10px;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .notification-item:hover {
+          background: #F3E8FF;
+          transform: translateY(-1px);
+        }
+
+        .notification-item-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 999px;
+          background: #7C3AED;
+          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
+        }
+
+        .notification-item-copy {
+          display: grid;
+          gap: 4px;
+          min-width: 0;
+        }
+
+        .notification-item-copy strong {
+          color: #1E1B4B;
+          font-size: 14px;
+          line-height: 1.25;
+        }
+
+        .notification-item-copy small {
+          color: #6d5d86;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1.3;
+        }
+
+        .notification-item em {
+          color: #7C3AED;
+          font-size: 11px;
+          font-style: normal;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .notification-empty {
+          display: grid;
+          gap: 4px;
+          place-items: center;
+          padding: 28px 12px;
+          color: #6d5d86;
+          text-align: center;
+        }
+
+        .notification-empty strong {
+          color: #1E1B4B;
+        }
+
+        .news-modal-overlay {
+          z-index: 1400;
+        }
+
+        .news-detail-modal {
+          width: min(620px, calc(100vw - 32px));
+          border-radius: 24px;
+          background: rgba(255, 255, 255, 0.98);
+          border: 1px solid rgba(124, 58, 237, 0.16);
+          box-shadow: 0 28px 70px rgba(76, 29, 149, 0.24);
+          overflow: hidden;
+        }
+        .news-detail-header {
+          padding: 24px 26px;
+          background: linear-gradient(135deg, #F3E8FF, #ffffff);
+          border-bottom: 1px solid rgba(124, 58, 237, 0.12);
+        }
+
+        .news-detail-header .modal-title {
+          display: grid;
+          gap: 8px;
+        }
+
+        .news-detail-header h2 {
+          margin: 0;
+          color: #1E1B4B;
+          font-size: 26px;
+          line-height: 1.2;
+        }
+
+        .news-detail-header p {
+          margin: 0;
+          color: #6d5d86;
+          font-weight: 700;
+        }
+
+        .news-detail-tag {
+          width: fit-content;
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: #4C1D95;
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .news-detail-body {
+          display: grid;
+          gap: 16px;
+          padding: 24px 26px 28px;
+        }
+
+        .news-detail-body p {
+          margin: 0;
+          color: #334155;
+          font-size: 16px;
+          line-height: 1.7;
+        }
+
+        .news-detail-sinhala {
+          color: #4C1D95 !important;
+          font-weight: 800;
+        }
+
+        .news-detail-note {
+          display: grid;
+          gap: 8px;
+          padding: 16px;
+          border-radius: 18px;
+          background: #FAF5FF;
+          border: 1px solid rgba(124, 58, 237, 0.14);
+        }
+
+        .news-detail-note strong {
+          color: #4C1D95;
+        }
+
+        .news-detail-note span {
+          color: #4b5563;
+          line-height: 1.65;
+        }
         .profile-pill {
           min-width: 230px;
           height: 50px;
@@ -2149,6 +3003,554 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .dashboard-container {
           max-width: 1670px;
           padding: 0 36px;
+        }
+
+        .student-footer {
+          margin-top: 28px;
+          padding: 46px 4% 28px;
+          color: #cbd5e1;
+          background:
+            linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(124, 58, 237, 0.16)),
+            #0f172a;
+        }
+
+        .student-footer .footer-grid {
+          display: grid;
+          grid-template-columns: 1.4fr repeat(3, 1fr);
+          gap: 28px;
+        }
+
+        .student-footer .footer-brand,
+        .student-footer h4 {
+          color: #ffffff;
+        }
+
+        .student-footer .footer-brand {
+          display: inline-flex;
+          margin-bottom: 14px;
+        }
+
+        .student-footer .brand-name {
+          color: #ffffff;
+        }
+
+        .student-footer h4 {
+          margin: 0 0 12px;
+        }
+
+        .student-footer ul {
+          display: grid;
+          gap: 8px;
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+
+        .student-footer p {
+          line-height: 1.65;
+        }
+
+        .student-footer .footer-accent {
+          color: #67e8f9;
+          font-weight: 800;
+        }
+
+        .student-footer .footer-divider {
+          height: 1px;
+          margin: 28px 0 16px;
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .student-footer .footer-copy {
+          margin: 0;
+          color: #94a3b8;
+          text-align: center;
+        }
+
+        .stream-subject-head,
+        .subject-detail-hero {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          margin: 8px 0 42px;
+        }
+
+        .stream-head-icon,
+        .subject-stream-icon {
+          width: 80px;
+          height: 80px;
+          border-radius: 18px;
+          color: #ffffff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 36px;
+          font-weight: 800;
+          flex-shrink: 0;
+        }
+
+        .stream-head-icon.green,
+        .subject-stream-icon.green,
+        .subject-square-icon.green { background: #1db954; }
+        .stream-head-icon.blue,
+        .subject-stream-icon.blue,
+        .subject-square-icon.blue { background: #2f6df6; }
+        .stream-head-icon.orange,
+        .subject-stream-icon.orange,
+        .subject-square-icon.orange { background: #f97316; }
+        .stream-head-icon.purple,
+        .subject-stream-icon.purple,
+        .subject-square-icon.purple { background: #a142f4; }
+        .stream-head-icon.teal,
+        .subject-stream-icon.teal,
+        .subject-square-icon.teal { background: #0f9b8a; }
+
+        .stream-subject-head h2,
+        .subject-title-row h2 {
+          margin: 0;
+          color: #00163d;
+          font-size: 40px;
+          letter-spacing: -0.03em;
+        }
+
+        .stream-subject-head p,
+        .subject-detail-hero p,
+        .subject-detail-hero small {
+          margin: 4px 0 0;
+          color: #334155;
+          font-size: 21px;
+          font-weight: 600;
+        }
+
+        .stream-subject-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(260px, 1fr));
+          gap: 32px;
+        }
+
+        .stream-subject-card,
+        .biology-lesson-card,
+        .subject-stat-card {
+          background: #ffffff;
+          border: 1px solid rgba(226, 232, 240, 0.86);
+          border-radius: 18px;
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10);
+        }
+
+        .stream-subject-card {
+          min-height: 330px;
+          padding: 30px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .subject-card-topline,
+        .lesson-card-topline {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 26px;
+        }
+
+        .subject-square-icon,
+        .bio-lesson-icon {
+          width: 60px;
+          height: 60px;
+          border-radius: 14px;
+          color: #ffffff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 28px;
+          font-weight: 800;
+        }
+
+        .subject-card-topline strong {
+          padding: 8px 16px;
+          border-radius: 999px;
+          background: #dcfce7;
+          color: #078a38;
+          font-size: 15px;
+        }
+
+        .stream-subject-card h4,
+        .biology-lesson-card h4 {
+          margin: 0 0 8px;
+          color: #00163d;
+          font-size: 27px;
+          line-height: 1.15;
+        }
+
+        .stream-subject-card p,
+        .biology-lesson-card p {
+          margin: 0;
+          color: #334155;
+          font-size: 19px;
+          font-weight: 600;
+        }
+
+        .subject-meta-row,
+        .biology-counts {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          margin: 26px 0 22px;
+          color: #26405f;
+          font-size: 16px;
+        }
+
+        .stream-subject-card .subject-btn,
+        .biology-lesson-card .btn {
+          margin-top: auto;
+          width: 100%;
+          min-height: 60px;
+          border-radius: 13px;
+          font-size: 20px;
+        }
+
+        .subject-detail-hero {
+          align-items: flex-start;
+        }
+
+        .subject-title-row {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .subject-title-row span,
+        .lesson-card-topline strong {
+          padding: 8px 16px;
+          border-radius: 999px;
+          background: #dcfce7;
+          color: #078a38;
+          font-weight: 800;
+        }
+
+        .subject-detail-actions {
+          margin-left: auto;
+          display: flex;
+          gap: 14px;
+        }
+
+        .subject-stat-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(160px, 1fr));
+          gap: 22px;
+          margin-bottom: 96px;
+        }
+
+        .subject-stat-card {
+          min-height: 136px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 26px 30px;
+        }
+
+        .subject-stat-card span {
+          width: 50px;
+          height: 50px;
+          border-radius: 10px;
+          background: #dbeafe;
+          color: #2563eb;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+        }
+
+        .subject-stat-card strong {
+          display: block;
+          color: #00163d;
+          font-size: 32px;
+        }
+
+        .subject-stat-card p {
+          margin: 0;
+          color: #334155;
+          font-size: 18px;
+        }
+
+        .biology-lessons-section h3 {
+          margin: 0 0 30px;
+          color: #00163d;
+          font-size: 30px;
+        }
+
+        .biology-lesson-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(260px, 1fr));
+          gap: 32px;
+        }
+
+        .biology-lesson-card {
+          min-height: 374px;
+          padding: 30px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .biology-progress {
+          height: 10px;
+          border-radius: 999px;
+          background: #e2e8f0;
+          margin: 26px 0 18px;
+          overflow: hidden;
+        }
+
+        .biology-progress span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: #1db954;
+        }
+
+        .lesson-resource-hero {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          margin-bottom: 72px;
+        }
+
+        .lesson-resource-hero h2 {
+          margin: 0;
+          color: #00163d;
+          font-size: 40px;
+        }
+
+        .lesson-resource-hero p,
+        .lesson-resource-hero small {
+          display: block;
+          margin-top: 6px;
+          color: #334155;
+          font-size: 18px;
+        }
+
+        .lesson-resource-hero .btn {
+          margin-left: auto;
+        }
+
+        .resource-panel {
+          background: #ffffff;
+          border: 1px solid rgba(226, 232, 240, 0.9);
+          border-radius: 18px;
+          box-shadow: 0 14px 34px rgba(15, 23, 42, 0.10);
+          padding: 30px;
+          margin-bottom: 80px;
+        }
+
+        .resource-title-row {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          margin-bottom: 20px;
+        }
+
+        .resource-title-row h3 {
+          margin: 0;
+          color: #00163d;
+          font-size: 30px;
+        }
+
+        .resource-icon {
+          width: 50px;
+          height: 50px;
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          font-weight: 800;
+        }
+
+        .resource-icon.video { background: #fee2e2; color: #ef4444; }
+        .resource-icon.notes { background: #ffedd5; color: #f97316; }
+        .resource-icon.papers { background: #f3e8ff; color: #9333ea; }
+
+        .video-frame {
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          border-radius: 14px;
+          overflow: hidden;
+          background: #0f172a;
+        }
+
+        .video-frame iframe {
+          width: 100%;
+          height: 100%;
+          border: 0;
+          display: block;
+        }
+
+        .video-meta-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 22px;
+          margin-top: 18px;
+          color: #334155;
+          font-size: 16px;
+        }
+
+        .notes-resource-grid,
+        .paper-resource-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(240px, 1fr));
+          gap: 20px;
+        }
+
+        .note-resource-card,
+        .paper-resource-card {
+          border: 1px solid #dbe4ef;
+          border-radius: 14px;
+          padding: 20px;
+          background: #ffffff;
+        }
+
+        .note-resource-card {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 14px;
+        }
+
+        .note-resource-card > span {
+          width: 58px;
+          height: 58px;
+          border-radius: 10px;
+          background: #fff7ed;
+          color: #f97316;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+        }
+
+        .note-resource-card h4,
+        .paper-resource-card h4 {
+          margin: 0 0 8px;
+          color: #00163d;
+          font-size: 20px;
+        }
+
+        .note-resource-card p,
+        .paper-resource-card p {
+          margin: 0;
+          color: #334155;
+        }
+
+        .note-resource-card button {
+          grid-column: 1 / -1;
+          min-height: 46px;
+          border: 0;
+          border-radius: 10px;
+          background: #f97316;
+          color: #ffffff;
+          font-size: 17px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .paper-selector {
+          display: grid;
+          gap: 18px;
+          margin-bottom: 30px;
+        }
+
+        .paper-year-row,
+        .paper-type-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+        }
+
+        .paper-year-row button,
+        .paper-type-tabs button {
+          border: 0;
+          border-radius: 10px;
+          min-width: 110px;
+          min-height: 50px;
+          background: #eef2f7;
+          color: #1e293b;
+          font-size: 20px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .paper-year-row button.active {
+          background: linear-gradient(135deg, #2563eb, #0f9b8a);
+          color: #ffffff;
+        }
+
+        .paper-type-tabs {
+          width: fit-content;
+          padding: 5px;
+          border-radius: 999px;
+          background: #eef2f7;
+        }
+
+        .paper-type-tabs button {
+          border-radius: 999px;
+          background: transparent;
+        }
+
+        .paper-type-tabs button.active {
+          background: #ffffff;
+          color: #2563eb;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        .paper-resource-grid {
+          grid-template-columns: repeat(2, minmax(260px, 1fr));
+        }
+
+        .paper-card-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .paper-card-head span {
+          align-self: flex-start;
+          padding: 7px 14px;
+          border-radius: 999px;
+          background: #fef3c7;
+          color: #a16207;
+          font-weight: 800;
+        }
+
+        .paper-card-head span.hard {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+
+        .paper-actions {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          margin-top: 20px;
+        }
+
+        .paper-actions button {
+          min-height: 48px;
+          border-radius: 10px;
+          font-weight: 800;
+          font-size: 16px;
+          cursor: pointer;
+        }
+
+        .paper-actions .start {
+          border: 0;
+          color: #ffffff;
+          background: linear-gradient(135deg, #2563eb, #0f9b8a);
+        }
+
+        .paper-actions .pdf {
+          border: 1px solid #cbd5e1;
+          background: #ffffff;
+          color: #1e293b;
+          padding: 0 22px;
         }
 
         .compact-dashboard {
@@ -2397,6 +3799,24 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .compact-news-list {
           display: grid;
           gap: 14px;
+          max-height: 450px;
+          overflow-y: auto;
+          padding-right: 6px;
+          overscroll-behavior: contain;
+        }
+
+        .compact-news-list::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .compact-news-list::-webkit-scrollbar-track {
+          background: #f3e8ff;
+          border-radius: 999px;
+        }
+
+        .compact-news-list::-webkit-scrollbar-thumb {
+          background: #c084fc;
+          border-radius: 999px;
         }
 
         .news-item {
@@ -2409,6 +3829,18 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           border: 1px solid #edf2f7;
           border-radius: 12px;
           background: #f9fbfd;
+          width: 100%;
+          color: inherit;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .news-item:hover {
+          border-color: rgba(76, 29, 149, 0.24);
+          box-shadow: 0 14px 28px rgba(76, 29, 149, 0.10);
+          transform: translateY(-1px);
         }
 
         .news-icon {
@@ -2838,6 +4270,29 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             grid-template-columns: 1fr;
           }
 
+          .student-footer .footer-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .stream-subject-grid,
+          .biology-lesson-grid,
+          .subject-stat-grid,
+          .notes-resource-grid,
+          .paper-resource-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .subject-detail-hero,
+          .lesson-resource-hero {
+            flex-direction: column;
+          }
+
+          .subject-detail-actions,
+          .lesson-resource-hero .btn {
+            margin-left: 0;
+            width: 100%;
+          }
+
           .toggle-group {
             grid-column: span 1;
           }
@@ -2877,6 +4332,209 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           .subject-card-grid-home {
             grid-template-columns: 1fr;
           }
+
+          .student-footer .footer-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .dashboard-shell {
+          background: #ffffff;
+          color: #1e1b4b;
+        }
+
+        .dashboard-header {
+          min-height: 74px;
+          background: rgba(255, 255, 255, 0.78);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.7);
+          box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+        }
+
+        .header-container {
+          max-width: none;
+          padding: 14px 4%;
+          gap: 22px;
+        }
+
+        .brand {
+          color: #7C3AED;
+          font-weight: 800;
+        }
+
+        .brand-mark {
+          width: 38px;
+          height: 38px;
+          background: linear-gradient(145deg, #ffffff, #dbeafe);
+          box-shadow: 0 12px 24px rgba(37, 99, 235, 0.14);
+        }
+
+        .brand-logo-shell {
+          padding: 3px;
+        }
+
+        .brand-name {
+          font-size: 18px;
+        }
+
+        .brand-copy small {
+          color: #64748b;
+          font-weight: 700;
+        }
+
+        .header-nav {
+          gap: 28px;
+          padding: 0;
+          background: transparent;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        .header-nav button {
+          position: relative;
+          min-width: auto;
+          min-height: auto;
+          padding: 0;
+          border-radius: 0;
+          color: #263854;
+          font-size: 15px;
+          font-weight: 700;
+          background: transparent;
+        }
+
+        .header-nav button::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          bottom: -7px;
+          width: 0;
+          height: 2px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #2563eb, #7c3aed);
+          transition: width 0.2s ease;
+        }
+
+        .header-nav button:hover,
+        .header-nav button.active {
+          color: #7C3AED;
+          background: transparent;
+          box-shadow: none;
+        }
+
+        .header-nav button:hover::after,
+        .header-nav button.active::after {
+          width: 100%;
+        }
+
+        .notification-btn,
+        .profile-pill,
+        .menu-toggle {
+          background: rgba(255, 255, 255, 0.72);
+          border-color: rgba(124, 58, 237, 0.14);
+          box-shadow: 0 12px 24px rgba(37, 99, 235, 0.10);
+        }
+
+        @media (max-width: 900px) {
+          .header-nav.active {
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(124, 58, 237, 0.14);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(76, 29, 149, 0.14);
+            padding: 12px;
+          }
+
+          .header-nav button {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 14px;
+            text-align: left;
+          }
+
+          .header-nav button::after {
+            display: none;
+          }
+
+          .header-nav button:hover,
+          .header-nav button.active {
+            background: #F3E8FF;
+          }
+        }
+
+        .brand-name,
+        .header-nav button:hover,
+        .header-nav button.active,
+        .view-all-btn,
+        .forgot-link {
+          color: #7C3AED;
+        }
+
+        .header-nav button:hover,
+        .header-nav button.active {
+          background: transparent;
+          box-shadow: none;
+        }
+
+        @media (max-width: 900px) {
+          .header-nav button:hover,
+          .header-nav button.active {
+            background: #F3E8FF;
+          }
+        }
+
+        .profile-avatar,
+        .btn.solid,
+        .sign-in-btn,
+        .mini-icon,
+        .ai-chat-input button {
+          background: linear-gradient(135deg, #7C3AED, #C084FC);
+        }
+
+        .motivation-banner,
+        .countdown-card,
+        .dashboard-card,
+        .summary-card,
+        .subject-card-modern,
+        .subject-card-modern-home,
+        .lesson-card-item,
+        .class-card-item,
+        .ai-chat-panel {
+          border-color: rgba(124, 58, 237, 0.18);
+          box-shadow: 0 20px 44px rgba(76, 29, 149, 0.10);
+        }
+
+        .thin-progress span,
+        .lesson-progress-fill,
+        .subject-progress-fill,
+        .subject-progress-fill-home {
+          background: linear-gradient(90deg, #7C3AED, #C084FC);
+        }
+
+        .section-subtitle,
+        .sinhala-line,
+        .lesson-sinhala {
+          color: #4C1D95;
+        }
+
+        .header-nav button::after {
+          background: #4C1D95;
+        }
+
+        .header-nav button:hover,
+        .header-nav button.active {
+          color: #4C1D95;
+        }
+
+        @media (max-width: 900px) {
+          .header-nav button:hover,
+          .header-nav button.active {
+            color: #4C1D95;
+          }
+        }
+
+        .dashboard-header .brand-name {
+          color: #4C1D95;
         }
       `}</style>
     </div>
@@ -2884,3 +4542,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 }
 
 export default StudentDashboard;
+
+
+
+

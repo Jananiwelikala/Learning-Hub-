@@ -11,7 +11,9 @@ const userSchema = new mongoose.Schema(
       ref: "Stream",
       default: null,
     },
-    password: { type: String, required: true, minlength: 8 },
+    stream: { type: String, trim: true, default: "" },
+    subject: { type: String, trim: true, default: "" },
+    password: { type: String, required: true },
     role: {
       type: String,
       enum: ["student", "teacher", "admin"],

@@ -4,7 +4,14 @@ const mongoose = require("mongoose");
 const lessonSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
+    sinhalaTitle: { type: String, trim: true },
     description: { type: String, trim: true },
+    icon: { type: String, trim: true },
+    progressPercent: { type: Number, min: 0, max: 100, default: 0 },
+    videoCount: { type: Number, default: 0 },
+    notesCount: { type: Number, default: 0 },
+    pastPaperCount: { type: Number, default: 0 },
+    order: { type: Number, default: 0 },
 
     subject: {
       type: mongoose.Schema.Types.ObjectId,
@@ -14,6 +21,10 @@ const lessonSchema = new mongoose.Schema(
 
     // These are the "locked" resources
     videoLink: { type: String, trim: true },
+    videoTitle: { type: String, trim: true },
+    durationMinutes: { type: Number, default: 0 },
+    viewCount: { type: Number, default: 0 },
+    updatedLabel: { type: String, trim: true },
     notesUrl: { type: String, trim: true },
     pastPaperMcqUrl: { type: String, trim: true },
     pastPaperStructuredUrl: { type: String, trim: true },

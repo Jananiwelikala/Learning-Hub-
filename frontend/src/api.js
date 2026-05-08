@@ -3,7 +3,7 @@ import config from './config';
 
 export async function login({ email, password }) {
   try {
-    const response = await fetch(`${config.API_BASE_URL}/login`, {
+    const response = await fetch(`${config.API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -13,7 +13,7 @@ export async function login({ email, password }) {
 
     const data = await response.json();
 
-    if (response.ok) {
+    if (response.ok && data.success) {
       return { success: true, token: data.token, user: data.user };
     } else {
       return { success: false, error: data.message || 'Login failed' };
@@ -25,7 +25,7 @@ export async function login({ email, password }) {
 
 export async function register(userData) {
   try {
-    const response = await fetch(`${config.API_BASE_URL}/register`, {
+    const response = await fetch(`${config.API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,7 +35,7 @@ export async function register(userData) {
 
     const data = await response.json();
 
-    if (response.ok) {
+    if (response.ok && data.success) {
       return { success: true, token: data.token, user: data.user };
     } else {
       return { success: false, error: data.message || 'Registration failed' };
@@ -390,6 +390,50 @@ export async function getLessonFull(token, lessonId) {
   }
 }
 
+export async function getStudentSubjects(token) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/subjects`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to fetch student subjects' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function getStudentLessons(token, subjectId) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/lessons/${subjectId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, lessons: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to fetch student lessons' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 export async function getQuestionsForLesson(token, lessonId, questionType = null) {
   try {
     const queryParams = new URLSearchParams();
@@ -515,4 +559,49 @@ export async function getApprovedPostById(postId) {
   } catch (error) {
     return { success: false, error: 'Network error. Please check your connection.' };
   }
+}
+
+async function getPublicJson(path, fallbackMessage) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      return { success: true, data };
+    }
+
+    return { success: false, error: data.message || fallbackMessage };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function getLandingSummary() {
+  const result = await getPublicJson('/public/landing-summary', 'Failed to fetch landing summary');
+  if (!result.success) return result;
+  return { success: true, summary: result.data };
+}
+
+export async function getFeaturedSubjects(limit = 6) {
+  const result = await getPublicJson(
+    `/public/featured-subjects?limit=${encodeURIComponent(limit)}`,
+    'Failed to fetch featured subjects'
+  );
+  if (!result.success) return result;
+  return { success: true, subjects: result.data };
+}
+
+export async function getApprovedClassPosts(limit = 3) {
+  const result = await getPublicJson(
+    `/public/approved-class-posts?limit=${encodeURIComponent(limit)}`,
+    'Failed to fetch approved class posts'
+  );
+  if (!result.success) return result;
+  return { success: true, posts: result.data };
 }

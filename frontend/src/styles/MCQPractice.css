@@ -346,6 +346,51 @@
   border-color: #3b82f6;
 }
 
+.progress-track,
+.question-card,
+.option-btn,
+.nav-btn,
+.quick-nav,
+.quick-nav-btn {
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+.progress-fill,
+.submit-answer-btn,
+.nav-btn.primary,
+.quick-nav-btn.active {
+  background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%);
+}
+
+.option-btn:hover:not(:disabled),
+.option-btn.selected,
+.nav-btn:hover:not(:disabled),
+.quick-nav-btn:hover {
+  background: #faf5ff;
+  border-color: #7c3aed;
+}
+
+.option-btn.selected {
+  color: #4c1d95;
+}
+
+.option-letter,
+.question-number,
+.nav-btn,
+.progress-text {
+  color: #7c3aed;
+}
+
+.option-btn.selected .option-letter {
+  background: #7c3aed;
+}
+
+.submit-answer-btn:hover:not(:disabled),
+.nav-btn.primary:hover {
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
 .quick-nav-btn.attempted {
   border-color: #10b981;
 }

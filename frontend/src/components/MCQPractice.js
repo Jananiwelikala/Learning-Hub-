@@ -57,7 +57,7 @@ function MCQPractice({ questions, token, lessonId }) {
   }
 
   if (!currentQuestion) {
-    return <div className="mcq-empty">No questions available</div>;
+    return <div className="mcq-empty">MCQ ප්‍රශ්න තවම නැහැ</div>;
   }
 
   return (
@@ -73,14 +73,14 @@ function MCQPractice({ questions, token, lessonId }) {
           ></div>
         </div>
         <p className="progress-text">
-          Question {currentQuestionIndex + 1} of {questions.length}
+          MCQ පුහුණුව {currentQuestionIndex + 1} / {questions.length}
         </p>
       </div>
 
       {/* Question Card */}
       <div className="question-card">
         <div className="question-header">
-          <h3 className="question-number">Question {currentQuestionIndex + 1}</h3>
+          <h3 className="question-number">ප්‍රශ්නය {currentQuestionIndex + 1}</h3>
           <span className="question-marks">{currentQuestion.maxMarks} marks</span>
         </div>
 
@@ -126,23 +126,23 @@ function MCQPractice({ questions, token, lessonId }) {
               {result.isCorrect ? (
                 <>
                   <span className="result-icon">✓</span>
-                  <span className="result-text">Correct!</span>
+                  <span className="result-text">නිවැරදියි!</span>
                 </>
               ) : (
                 <>
                   <span className="result-icon">✗</span>
-                  <span className="result-text">Incorrect</span>
+                  <span className="result-text">ඔබේ දුර්වල තැන් හඳුනාගන්න</span>
                 </>
               )}
             </div>
 
             <div className="result-details">
               <p className="result-marks">
-                You earned {result.earnedMarks} out of {result.maxMarks} marks
+                ඔබට ලකුණු {result.earnedMarks} / {result.maxMarks} ලැබුණා
               </p>
               {result.explanation && (
                 <div className="explanation">
-                  <p className="explanation-label">💡 Explanation:</p>
+                  <p className="explanation-label">පැහැදිලි කිරීම:</p>
                   <p className="explanation-text">{result.explanation}</p>
                 </div>
               )}
@@ -157,7 +157,7 @@ function MCQPractice({ questions, token, lessonId }) {
             onClick={handleSubmitAnswer}
             disabled={selectedAnswer === null || loading}
           >
-            {loading ? 'Submitting...' : 'Submit Answer'}
+            {loading ? 'Submit වෙමින්...' : 'පිළිතුර Submit කරන්න'}
           </button>
         )}
       </div>
@@ -169,19 +169,19 @@ function MCQPractice({ questions, token, lessonId }) {
           onClick={handlePreviousQuestion}
           disabled={currentQuestionIndex === 0}
         >
-          ← Previous
+          ← පෙර
         </button>
 
         {submitted && (
           <button className="nav-btn primary" onClick={handleNextQuestion}>
-            {isLastQuestion ? 'Finish' : 'Next Question →'}
+            {isLastQuestion ? 'අවසන් කරන්න' : 'ඊළඟ ප්‍රශ්නය →'}
           </button>
         )}
       </div>
 
       {/* Quick Navigation */}
       <div className="quick-nav">
-        <p className="quick-nav-label">Questions:</p>
+        <p className="quick-nav-label">ප්‍රශ්න:</p>
         <div className="quick-nav-buttons">
           {questions.map((_, index) => (
             <button

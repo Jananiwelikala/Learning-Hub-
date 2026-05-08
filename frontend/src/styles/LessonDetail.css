@@ -202,6 +202,58 @@
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
+.lesson-detail {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  color: #1e1b4b;
+}
+
+.lesson-header,
+.lesson-tabs,
+.tab-content {
+  border-color: rgba(124, 58, 237, 0.18);
+  box-shadow: 0 14px 34px rgba(76, 29, 149, 0.08);
+}
+
+.lesson-header .back-btn,
+.tab-btn:hover,
+.tab-btn.active,
+.material-info h3,
+.material-info p {
+  color: #7c3aed;
+}
+
+.lesson-header .back-btn:hover {
+  color: #4c1d95;
+}
+
+.tab-btn.active::after {
+  background: #7c3aed;
+}
+
+.lesson-description {
+  background: #f3e8ff;
+  border-left-color: #7c3aed;
+}
+
+.lesson-description h3,
+.lesson-description p {
+  color: #4c1d95;
+}
+
+.material-card {
+  background: #faf5ff;
+  border-color: #e9d5ff;
+}
+
+.material-card:hover {
+  background: #f3e8ff;
+  border-color: #c084fc;
+}
+
+.download-btn {
+  background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .lesson-header {

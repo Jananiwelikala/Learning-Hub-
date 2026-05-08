@@ -53,14 +53,14 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
   }, [loadLessonData]);
 
   if (loading) {
-    return <LoadingSpinner message="Loading lesson..." />;
+    return <LoadingSpinner message="පාඩම load වෙමින් පවතී..." />;
   }
 
   if (error || !lesson) {
     return (
       <ErrorMessage
-        title="Failed to load lesson"
-        message={error || 'Lesson not found'}
+        title="පාඩම load කිරීමට නොහැකි විය"
+        message={error || 'පාඩම සොයාගත නොහැක'}
         onRetry={loadLessonData}
       />
     );
@@ -89,7 +89,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
       {/* Header */}
       <header className="lesson-header">
         <button className="back-btn" onClick={onBack}>
-          ← Back to Lessons
+          ← පාඩම් වෙත
         </button>
         <div>
           <h1>{lesson.title}</h1>
@@ -103,14 +103,14 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
           className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
           onClick={() => setActiveTab('video')}
         >
-          🎥 Video
+            Video පාඩම
         </button>
         {lesson.notesUrl && (
           <button
             className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
             onClick={() => setActiveTab('notes')}
           >
-            📄 Notes & Materials
+            සටහන්
           </button>
         )}
         {questionsGrouped.mcq.length > 0 && (
@@ -118,7 +118,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
             className={`tab-btn ${activeTab === 'mcq' ? 'active' : ''}`}
             onClick={() => setActiveTab('mcq')}
           >
-            ✓ MCQ ({questionsGrouped.mcq.length})
+            MCQ පුහුණුව ({questionsGrouped.mcq.length})
           </button>
         )}
         {questionsGrouped.structured.length > 0 && (
@@ -126,7 +126,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
             className={`tab-btn ${activeTab === 'structured' ? 'active' : ''}`}
             onClick={() => setActiveTab('structured')}
           >
-            📝 Structured ({questionsGrouped.structured.length})
+            Structured පිළිතුරු ({questionsGrouped.structured.length})
           </button>
         )}
         {questionsGrouped.essay.length > 0 && (
@@ -134,7 +134,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
             className={`tab-btn ${activeTab === 'essay' ? 'active' : ''}`}
             onClick={() => setActiveTab('essay')}
           >
-            ✍️ Essay ({questionsGrouped.essay.length})
+            Essay පිළිතුරු ({questionsGrouped.essay.length})
           </button>
         )}
       </nav>
@@ -144,7 +144,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
         {/* Video Tab */}
         {activeTab === 'video' && (
           <section className="tab-content">
-            <h2>Lesson Video</h2>
+            <h2>පාඩම් වීඩියෝව</h2>
             {embedVideoUrl ? (
               <div className="video-container">
                 <iframe
@@ -159,14 +159,14 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
               </div>
             ) : (
               <EmptyState
-                title="No video available"
-                message="Your teacher hasn't uploaded a video for this lesson yet."
+                title="වීඩියෝවක් තවම නැහැ"
+                message="මෙම පාඩම සඳහා වීඩියෝව ඉක්මනින් ලබාදේ."
               />
             )}
             
             {lesson.description && (
               <div className="lesson-description">
-                <h3>About this lesson</h3>
+                <h3>මෙම පාඩම ගැන</h3>
                 <p>{lesson.description}</p>
               </div>
             )}
@@ -176,14 +176,14 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
         {/* Notes Tab */}
         {activeTab === 'notes' && (
           <section className="tab-content">
-            <h2>Notes & Materials</h2>
+            <h2>සටහන්</h2>
             {lesson.notesUrl ? (
               <div className="materials-container">
                 <div className="material-card">
                   <div className="material-icon">📄</div>
                   <div className="material-info">
-                    <h3>Lesson Notes</h3>
-                    <p>Download comprehensive notes for this lesson</p>
+                    <h3>පාඩම් සටහන්</h3>
+                    <p>ඔබේ විභාග සූදානම වැඩි කරගන්න සටහන් භාවිතා කරන්න</p>
                   </div>
                   <a
                     href={lesson.notesUrl}
@@ -191,14 +191,14 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
                     rel="noopener noreferrer"
                     className="download-btn"
                   >
-                    📥 Download
+                    Download
                   </a>
                 </div>
               </div>
             ) : (
               <EmptyState
-                title="No materials available"
-                message="Notes and materials for this lesson are coming soon."
+                title="සටහන් තවම නැහැ"
+                message="මෙම පාඩම සඳහා සටහන් ඉක්මනින් ලබාදේ."
               />
             )}
           </section>
@@ -207,7 +207,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
         {/* MCQ Tab */}
         {activeTab === 'mcq' && (
           <section className="tab-content">
-            <h2>MCQ Practice</h2>
+            <h2>MCQ පුහුණුව</h2>
             {questionsGrouped.mcq.length > 0 ? (
               <MCQPractice
                 questions={questionsGrouped.mcq}
@@ -216,8 +216,8 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
               />
             ) : (
               <EmptyState
-                title="No MCQ questions"
-                message="No MCQ practice questions available for this lesson yet."
+                title="MCQ ප්‍රශ්න තවම නැහැ"
+                message="මෙම පාඩම සඳහා MCQ පුහුණුව ඉක්මනින් ලබාදේ."
               />
             )}
           </section>
@@ -226,7 +226,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
         {/* Structured Tab */}
         {activeTab === 'structured' && (
           <section className="tab-content">
-            <h2>Structured Questions</h2>
+            <h2>Structured පිළිතුරු</h2>
             {questionsGrouped.structured.length > 0 ? (
               <StructuredQuestion
                 questions={questionsGrouped.structured}
@@ -236,8 +236,8 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
               />
             ) : (
               <EmptyState
-                title="No structured questions"
-                message="No structured practice questions available for this lesson yet."
+                title="Structured ප්‍රශ්න තවම නැහැ"
+                message="මෙම පාඩම සඳහා structured පුහුණුව ඉක්මනින් ලබාදේ."
               />
             )}
           </section>
@@ -246,7 +246,7 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
         {/* Essay Tab */}
         {activeTab === 'essay' && (
           <section className="tab-content">
-            <h2>Essay Questions</h2>
+            <h2>Essay පිළිතුරු</h2>
             {questionsGrouped.essay.length > 0 ? (
               <StructuredQuestion
                 questions={questionsGrouped.essay}
@@ -256,8 +256,8 @@ function LessonDetail({ token, lessonId, subjectName, onBack }) {
               />
             ) : (
               <EmptyState
-                title="No essay questions"
-                message="No essay practice questions available for this lesson yet."
+                title="Essay ප්‍රශ්න තවම නැහැ"
+                message="මෙම පාඩම සඳහා essay පුහුණුව ඉක්මනින් ලබාදේ."
               />
             )}
           </section>

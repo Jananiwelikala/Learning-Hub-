@@ -13,6 +13,8 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Student specific fields
   const [stream, setStream] = useState("");
@@ -27,20 +29,25 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
     e.preventDefault();
 
     if (password.length < 8) {
+      setMessageType("error");
       setMessage("Password must be at least 8 characters");
       return;
     }
 
     if (password !== confirmPassword) {
+      setMessageType("error");
       setMessage("Passwords do not match");
       return;
     }
 
     if (!agree) {
+      setMessageType("error");
       setMessage("Please accept terms and privacy policy");
       return;
     }
 
+    setIsSubmitting(true);
+    setMessageType("info");
     setMessage("Creating account...");
 
     try {
@@ -64,23 +71,29 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
       const result = await register(payload);
 
       if (!result.success) {
+        setMessageType("error");
         setMessage(result.error || "Registration failed");
         return;
       }
 
       if (result.token) {
+        setMessageType("success");
         setMessage("Account created! Redirecting to your dashboard...");
         setTimeout(() => {
           onLogin(result);
         }, 800);
       } else {
+        setMessageType("success");
         setMessage("Account created successfully. Please login.");
         setTimeout(() => {
           onSwitchLogin();
         }, 1500);
       }
     } catch (err) {
+      setMessageType("error");
       setMessage("Cannot connect to server");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -297,8 +310,9 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                 </span>
               </label>
 
-              <button type="submit" className="sign-in-btn">
-                Create Account
+              <button type="submit" className="sign-in-btn" disabled={isSubmitting}>
+                {isSubmitting ? <span className="btn-spinner" aria-hidden="true" /> : null}
+                {isSubmitting ? "Creating Account..." : "Create Account"}
               </button>
 
               <p className="register-hint register-hint-login">
@@ -309,7 +323,7 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
               </p>
             </form>
 
-            {message ? <p className="login-message">{message}</p> : null}
+            {message ? <p className={`login-message ${messageType}`}>{message}</p> : null}
           </section>
         </div>
       </main>

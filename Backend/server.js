@@ -18,6 +18,9 @@ const subjectRoutes = require("./routes/subjectRoutes");
 const classPostRoutes = require("./routes/classPostRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const publicRoutes = require("./routes/publicRoutes");
+const authRoutes = require("./routes/authRoutes");
+const studentRoutes = require("./routes/studentRoutes");
 
 const app = express();
 const PUBLIC_REGISTER_ROLES = ["student", "teacher"];
@@ -55,6 +58,9 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Feature routes (auth checks are handled inside each route file where needed).
+app.use("/api/auth", authRoutes);
+app.use("/api", authRoutes);
+app.use("/api/student", studentRoutes);
 app.use("/api/streams", streamRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/class-posts", classPostRoutes);
@@ -63,6 +69,7 @@ app.use("/api/lessons", lessonRoutes);
 app.use("/api/mcqs", mcqRoutes);
 app.use("/api/assessments", assessmentRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/public", publicRoutes);
 
 // Quick health endpoint for uptime checks.
 app.get("/health", (req, res) => res.send("OK"));

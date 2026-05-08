@@ -29,7 +29,7 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
 
     if (result.success) {
       setSubmitted(true);
-      setSuccessMessage('Your answers have been submitted successfully!');
+      setSuccessMessage('ඔබේ පිළිතුරු සාර්ථකව submit කළා!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } else {
       alert('Error submitting answers: ' + result.error);
@@ -57,7 +57,7 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
   }
 
   if (!currentQuestion) {
-    return <div className="structured-empty">No questions available</div>;
+    return <div className="structured-empty">ප්‍රශ්න තවම නැහැ</div>;
   }
 
   const questionTypeLabel = questionType === 'essay' ? 'Essay' : 'Structured';
@@ -84,14 +84,14 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
           ></div>
         </div>
         <p className="progress-text">
-          Question {currentQuestionIndex + 1} of {questions.length}
+          ප්‍රශ්නය {currentQuestionIndex + 1} / {questions.length}
         </p>
       </div>
 
       {/* Question Card */}
       <div className="structured-card">
         <div className="question-header">
-          <h3 className="question-number">{questionTypeLabel} Question {currentQuestionIndex + 1}</h3>
+          <h3 className="question-number">{questionTypeLabel} ප්‍රශ්නය {currentQuestionIndex + 1}</h3>
           <span className="question-marks">{currentQuestion.maxMarks} marks</span>
         </div>
 
@@ -104,11 +104,11 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
 
         {/* Answer Text Area */}
         <div className="answer-section">
-          <label htmlFor={`answer-${currentQuestion._id}`}>Your Answer:</label>
+          <label htmlFor={`answer-${currentQuestion._id}`}>ඔබේ පිළිතුර:</label>
           <textarea
             id={`answer-${currentQuestion._id}`}
             className="answer-textarea"
-            placeholder={`Enter your ${questionType} answer here...`}
+            placeholder={`ඔබේ ${questionType} පිළිතුර මෙහි ලියන්න...`}
             value={currentAnswer}
             onChange={handleAnswerChange}
             disabled={submitted}
@@ -116,9 +116,9 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
           ></textarea>
           <div className="answer-hint">
             {questionType === 'essay' ? (
-              <p>💡 Write a comprehensive essay addressing all points in the question.</p>
+              <p>ඔබේ විභාග සූදානම වැඩි කරගන්න ප්‍රධාන කරුණු සියල්ල ආවරණය කරන්න.</p>
             ) : (
-              <p>💡 Provide a structured and clear answer with key points.</p>
+              <p>ප්‍රධාන කරුණු පැහැදිලිව සහ පිළිවෙලට ලියන්න.</p>
             )}
           </div>
         </div>
@@ -127,10 +127,10 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
           <div className="submission-feedback">
             <div className="submission-status submitted">
               <span className="status-icon">✓</span>
-              <span className="status-text">Submitted</span>
+              <span className="status-text">Submit කළා</span>
             </div>
             <p className="ai-feedback-notice">
-              🤖 Your answer will be evaluated by AI. Check back later for feedback!
+              AI සහාය ලබාගන්න. ඔබේ දුර්වල තැන් හඳුනාගන්න feedback බලන්න.
             </p>
           </div>
         )}
@@ -143,7 +143,7 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
           onClick={handlePreviousQuestion}
           disabled={currentQuestionIndex === 0}
         >
-          ← Previous
+          ← පෙර
         </button>
 
         <button
@@ -151,7 +151,7 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
           onClick={handleNextQuestion}
           disabled={isLastQuestion || !currentAnswer.trim()}
         >
-          Next Question →
+          ඊළඟ ප්‍රශ්නය →
         </button>
       </div>
 
@@ -161,7 +161,7 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
           <div className="submit-info">
             <p>
               {Object.values(answers).filter(a => a?.trim()).length} of{' '}
-              {questions.length} questions answered
+              {questions.length} ප්‍රශ්නවලට පිළිතුරු දී ඇත
             </p>
           </div>
           <button
@@ -169,14 +169,14 @@ function StructuredQuestion({ questions, token, lessonId, questionType }) {
             onClick={handleSubmitAnswers}
             disabled={!allAnswersProvided || loading}
           >
-            {loading ? 'Submitting...' : 'Submit All Answers'}
+            {loading ? 'Submit වෙමින්...' : 'සියලු පිළිතුරු Submit කරන්න'}
           </button>
         </div>
       )}
 
       {/* Quick Navigation */}
       <div className="quick-nav">
-        <p className="quick-nav-label">Questions:</p>
+        <p className="quick-nav-label">ප්‍රශ්න:</p>
         <div className="quick-nav-buttons">
           {questions.map((_, index) => (
             <button

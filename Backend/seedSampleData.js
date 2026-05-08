@@ -4,142 +4,181 @@ const Lesson = require("./models/Lesson");
 const MCQ = require("./models/MCQ");
 const AssessmentQuestion = require("./models/AssessmentQuestion");
 const User = require("./models/User");
+const Note = require("./models/Note");
+const PastPaper = require("./models/PastPaper");
 const bcrypt = require("bcryptjs");
+
+const alStreams = [
+  {
+    name: "Bio Science",
+    code: "bio-science",
+    sinhalaName: "ජීව විද්‍යා ධාරාව",
+    description: "Biology and Chemistry are core subjects. Students can select Physics or Agricultural Science as the third subject.",
+    icon: "microscope",
+    color: "green",
+    subjects: [
+      { name: "Biology", sinhalaName: "ජීව විද්‍යාව", code: "biology", icon: "sprout", color: "green", papersCount: 45, studentsCount: 1200, order: 1 },
+      { name: "Chemistry", sinhalaName: "රසායන විද්‍යාව", code: "chemistry", icon: "flask", color: "green", papersCount: 42, studentsCount: 1150, order: 2 },
+      { name: "Physics", sinhalaName: "භෞතික විද්‍යාව", code: "physics", icon: "atom", color: "green", papersCount: 40, studentsCount: 1100, isOptional: true, order: 3 },
+      { name: "Agricultural Science", sinhalaName: "කෘෂි විද්‍යාව", code: "agricultural-science", icon: "leaf", color: "green", papersCount: 32, studentsCount: 720, isOptional: true, order: 4 },
+    ],
+  },
+  {
+    name: "Physical Science",
+    code: "physical-science",
+    sinhalaName: "ගණිත ධාරාව",
+    description: "Main subjects are Combined Mathematics, Physics, and Chemistry or ICT.",
+    icon: "calculator",
+    color: "blue",
+    subjects: [
+      { name: "Combined Mathematics", sinhalaName: "සංයුක්ත ගණිතය", code: "combined-mathematics", icon: "grid", color: "blue", papersCount: 50, studentsCount: 980, order: 1 },
+      { name: "Physics", sinhalaName: "භෞතික විද්‍යාව", code: "physics", icon: "atom", color: "blue", papersCount: 40, studentsCount: 950, order: 2 },
+      { name: "Chemistry", sinhalaName: "රසායන විද්‍යාව", code: "chemistry", icon: "flask", color: "blue", papersCount: 42, studentsCount: 920, order: 3 },
+      { name: "ICT", sinhalaName: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", code: "ict", icon: "computer", color: "blue", papersCount: 30, studentsCount: 760, isOptional: true, order: 4 },
+    ],
+  },
+  {
+    name: "Commerce",
+    code: "commerce",
+    sinhalaName: "වාණිජ ධාරාව",
+    description: "Commerce students commonly study Accounting, Business Studies, and Economics.",
+    icon: "chart",
+    color: "orange",
+    subjects: [
+      { name: "Accounting", sinhalaName: "ගිණුම්කරණය", code: "accounting", icon: "coin", color: "orange", papersCount: 38, studentsCount: 850, order: 1 },
+      { name: "Business Studies", sinhalaName: "ව්‍යාපාර අධ්‍යයනය", code: "business-studies", icon: "briefcase", color: "orange", papersCount: 35, studentsCount: 820, order: 2 },
+      { name: "Economics", sinhalaName: "ආර්ථික විද්‍යාව", code: "economics", icon: "trend", color: "orange", papersCount: 36, studentsCount: 800, order: 3 },
+    ],
+  },
+  {
+    name: "Arts",
+    code: "arts",
+    sinhalaName: "කලා ධාරාව",
+    description: "Arts students select three subjects from social sciences, languages, and aesthetic subject baskets.",
+    icon: "book",
+    color: "purple",
+    subjects: [
+      { name: "Sinhala", sinhalaName: "සිංහල", code: "sinhala", icon: "language", color: "purple", papersCount: 32, studentsCount: 750, order: 1 },
+      { name: "History", sinhalaName: "ඉතිහාසය", code: "history", icon: "archive", color: "purple", papersCount: 30, studentsCount: 720, order: 2 },
+      { name: "Geography", sinhalaName: "භූගෝල විද්‍යාව", code: "geography", icon: "globe", color: "purple", papersCount: 28, studentsCount: 700, order: 3 },
+      { name: "Political Science", sinhalaName: "දේශපාලන විද්‍යාව", code: "political-science", icon: "scale", color: "purple", papersCount: 29, studentsCount: 680, order: 4 },
+      { name: "Media", sinhalaName: "මාධ්‍ය අධ්‍යයනය", code: "media", icon: "media", color: "purple", papersCount: 24, studentsCount: 610, order: 5 },
+    ],
+  },
+  {
+    name: "Technology",
+    code: "technology",
+    sinhalaName: "තාක්ෂණවේදය ධාරාව",
+    description: "Science for Technology is compulsory. Students select ET or BST with an additional subject such as ICT.",
+    icon: "cpu",
+    color: "teal",
+    subjects: [
+      { name: "Science for Technology", sinhalaName: "තාක්ෂණවේදය සඳහා විද්‍යාව", code: "sft", icon: "flask", color: "teal", papersCount: 34, studentsCount: 780, order: 1 },
+      { name: "Engineering Technology", sinhalaName: "ඉංජිනේරු තාක්ෂණවේදය", code: "et", icon: "tool", color: "teal", papersCount: 31, studentsCount: 700, isOptional: true, order: 2 },
+      { name: "Bio-systems Technology", sinhalaName: "ජෛව පද්ධති තාක්ෂණවේදය", code: "bst", icon: "leaf", color: "teal", papersCount: 30, studentsCount: 690, isOptional: true, order: 3 },
+      { name: "ICT", sinhalaName: "තොරතුරු හා සන්නිවේදන තාක්ෂණය", code: "ict", icon: "computer", color: "teal", papersCount: 30, studentsCount: 760, isOptional: true, order: 4 },
+    ],
+  },
+];
+
+async function upsertSeedUser({ name, email, password, role, phone = "", stream = "", subject = "" }) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const existingUser = await User.findOne({ email: normalizedEmail });
+
+  if (!existingUser) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await User.create({
+      name,
+      email: normalizedEmail,
+      phone,
+      password: hashedPassword,
+      role,
+      stream,
+      subject,
+    });
+    return;
+  }
+
+  const updates = {};
+  if (existingUser.role !== role) updates.role = role;
+  if (!existingUser.name) updates.name = name;
+  if (!existingUser.phone && phone) updates.phone = phone;
+  if (!existingUser.stream && stream) updates.stream = stream;
+  if (!existingUser.subject && subject) updates.subject = subject;
+
+  const shouldRefreshDemoPassword = process.env.NODE_ENV !== "production";
+  const passwordMatches = await bcrypt.compare(password, existingUser.password);
+  if (shouldRefreshDemoPassword && !passwordMatches) {
+    updates.password = await bcrypt.hash(password, 10);
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await User.updateOne({ _id: existingUser._id }, { $set: updates });
+  }
+}
 
 // Creates a small demo dataset for Biology -> Physics -> Measurements.
 async function seedSampleData() {
-  const stream = await Stream.findOneAndUpdate(
-    { name: "Biology Stream" },
-    { name: "Biology Stream", description: "Sample stream for demo content" },
-    { new: true, upsert: true }
-  );
+  const streamDocs = {};
+  const subjectDocs = {};
 
-  const subject = await Subject.findOneAndUpdate(
-    { name: "Physics", stream: stream._id },
-    { name: "Physics", stream: stream._id },
-    { new: true, upsert: true }
-  );
+  for (const streamData of alStreams) {
+    const stream = await Stream.findOneAndUpdate(
+      { code: streamData.code },
+      {
+        name: streamData.name,
+        code: streamData.code,
+        sinhalaName: streamData.sinhalaName,
+        description: streamData.description,
+        icon: streamData.icon,
+        color: streamData.color,
+        order: alStreams.indexOf(streamData) + 1,
+      },
+      { new: true, upsert: true }
+    );
 
-  const lesson = await Lesson.findOneAndUpdate(
-    { title: "Measurements", subject: subject._id },
-    {
-      title: "Measurements",
-      description: "First lesson with sample resources and MCQs.",
-      subject: subject._id,
-      videoLink: "https://www.youtube.com/watch?v=MlQ4zM49xS0",
-      notesUrl:
-        "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      pastPaperMcqUrl:
-        "https://www.africau.edu/images/default/sample.pdf",
-      pastPaperStructuredUrl:
-        "https://file-examples.com/wp-content/storage/2017/10/file-sample_150kB.pdf",
-      pastPaperEssayUrl:
-        "https://file-examples.com/wp-content/storage/2017/10/file-example_PDF_500_kB.pdf",
-    },
-    { new: true, upsert: true }
-  );
+    streamDocs[streamData.name] = stream;
 
-  const existingCount = await MCQ.countDocuments({ lesson: lesson._id });
-  if (existingCount === 0) {
-    await MCQ.insertMany([
-      {
-        lesson: lesson._id,
-        question: "Which SI base unit is used to measure length?",
-        options: ["Kilogram", "Meter", "Second", "Ampere"],
-        correctOptionIndex: 1,
-        examYear: 2024,
-      },
-      {
-        lesson: lesson._id,
-        question: "What is the least count of a standard laboratory ruler?",
-        options: ["1 mm", "1 cm", "0.1 cm", "0.5 mm"],
-        correctOptionIndex: 0,
-        examYear: 2024,
-      },
-      {
-        lesson: lesson._id,
-        question: "A micrometer screw gauge is mainly used to measure:",
-        options: [
-          "Long distances",
-          "Mass of objects",
-          "Small thickness/diameter",
-          "Time intervals",
-        ],
-        correctOptionIndex: 2,
-        examYear: 2024,
-      },
-      {
-        lesson: lesson._id,
-        question: "Random errors can be reduced by:",
-        options: [
-          "Taking one measurement only",
-          "Ignoring instruments",
-          "Taking repeated readings and averaging",
-          "Changing units",
-        ],
-        correctOptionIndex: 2,
-        examYear: 2024,
-      },
-      {
-        lesson: lesson._id,
-        question: "Which quantity is measured using a stopwatch?",
-        options: ["Temperature", "Time", "Force", "Electric current"],
-        correctOptionIndex: 1,
-        examYear: 2024,
-      },
-    ]);
+    for (const subjectData of streamData.subjects) {
+      const subject = await Subject.findOneAndUpdate(
+        { name: subjectData.name, stream: stream._id },
+        {
+          ...subjectData,
+          stream: stream._id,
+          isCore: !subjectData.isOptional,
+          isOptional: Boolean(subjectData.isOptional),
+        },
+        { new: true, upsert: true }
+      );
+
+      subjectDocs[`${streamData.name}:${subjectData.name}`] = subject;
+    }
   }
 
-  const assessmentQuestionCount = await AssessmentQuestion.countDocuments({
-    lesson: lesson._id,
+  await upsertSeedUser({
+    name: "Learning Hub Admin",
+    email: "admin@learninghub.lk",
+    password: "Admin123",
+    role: "admin",
   });
 
-  if (assessmentQuestionCount === 0) {
-    await AssessmentQuestion.insertMany([
-      {
-        lesson: lesson._id,
-        questionType: "structured",
-        prompt:
-          "Explain two precautions when using a vernier caliper and justify why they improve measurement accuracy.",
-        maxMarks: 10,
-        examYear: 2024,
-      },
-      {
-        lesson: lesson._id,
-        questionType: "essay",
-        prompt:
-          "Discuss the importance of SI units and uncertainty analysis in Advanced Level physics practical work.",
-        maxMarks: 20,
-        examYear: 2024,
-      },
-    ]);
-  }
+  await upsertSeedUser({
+    name: "Test Student",
+    email: "student@test.com",
+    password: "123456",
+    role: "student",
+    phone: "+94 71 000 0001",
+    stream: "Bio Science",
+  });
 
-  const adminEmail = "admin@learninghub.lk";
-  const existingAdmin = await User.findOne({ email: adminEmail });
-  if (!existingAdmin) {
-    const hashedAdminPassword = await bcrypt.hash("Admin@123", 10);
-    await User.create({
-      name: "Learning Hub Admin",
-      email: adminEmail,
-      phone: "",
-      password: hashedAdminPassword,
-      role: "admin",
-    });
-  }
-
-  const teacherEmail = "teacher@learninghub.lk";
-  const existingTeacher = await User.findOne({ email: teacherEmail });
-  if (!existingTeacher) {
-    const hashedTeacherPassword = await bcrypt.hash("Teacher@123", 10);
-    await User.create({
-      name: "John Smith",
-      email: teacherEmail,
-      phone: "+94 77 123 4567",
-      password: hashedTeacherPassword,
-      role: "teacher",
-    });
-  }
+  await upsertSeedUser({
+    name: "Test Teacher",
+    email: "teacher@test.com",
+    password: "123456",
+    role: "teacher",
+    phone: "+94 77 000 0002",
+    subject: "Biology",
+  });
 }
 
 module.exports = seedSampleData;

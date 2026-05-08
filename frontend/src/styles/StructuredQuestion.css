@@ -330,6 +330,53 @@
   border-color: #3b82f6;
 }
 
+.progress-track,
+.structured-card,
+.answer-textarea,
+.nav-btn,
+.submit-section,
+.quick-nav,
+.quick-nav-btn {
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+.progress-fill,
+.submit-all-btn,
+.quick-nav-btn.active {
+  background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%);
+}
+
+.question-number,
+.nav-btn,
+.progress-text,
+.answer-hint p,
+.submit-info p,
+.exam-year {
+  color: #7c3aed;
+}
+
+.exam-year,
+.answer-hint,
+.submit-section,
+.quick-nav-btn:hover {
+  background: #faf5ff;
+}
+
+.answer-textarea:focus {
+  border-color: #7c3aed;
+  background: #faf5ff;
+}
+
+.nav-btn:hover:not(:disabled) {
+  border-color: #7c3aed;
+  background: #faf5ff;
+}
+
+.submit-all-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
 .quick-nav-btn.answered {
   border-color: #10b981;
 }

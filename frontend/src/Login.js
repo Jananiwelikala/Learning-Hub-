@@ -6,24 +6,33 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setIsSubmitting(true);
+    setMessageType("info");
     setMessage("Signing in...");
 
     try {
       const result = await login({ email, password });
 
       if (result.success && result.token) {
+        setMessageType("success");
         onLogin(result);
         setMessage("Login successful");
       } else {
+        setMessageType("error");
         setMessage(result.error || "Login failed");
       }
     } catch (err) {
+      setMessageType("error");
       setMessage("Cannot connect to server");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -104,8 +113,9 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
                 </button>
               </div>
 
-              <button type="submit" className="sign-in-btn">
-                Sign In
+              <button type="submit" className="sign-in-btn" disabled={isSubmitting}>
+                {isSubmitting ? <span className="btn-spinner" aria-hidden="true" /> : null}
+                {isSubmitting ? "Signing In..." : "Sign In"}
               </button>
 
               <div className="login-divider">
@@ -120,7 +130,7 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
               </p>
             </form>
 
-            {message ? <p className="login-message">{message}</p> : null}
+            {message ? <p className={`login-message ${messageType}`}>{message}</p> : null}
           </section>
         </div>
       </main>

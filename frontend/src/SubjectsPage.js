@@ -150,7 +150,9 @@ function SubjectsPage({
     <div className="home subjects-page">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">AL</span>
+          <span className="brand-mark brand-logo-shell">
+            <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+          </span>
           <span className="brand-name">Learning Hub</span>
         </div>
 
@@ -165,7 +167,7 @@ function SubjectsPage({
             Home
           </a>
           <a href="#subjects-page-streams" className="active">
-            Subjects
+            Subjects / විෂය
           </a>
           <a
             href="#about"
@@ -213,7 +215,7 @@ function SubjectsPage({
                 <p className="stream-subtitle">{stream.subtitle}</p>
                 <p className="stream-count">
                   <span className="count-icon">{"\u25eb"}</span>{" "}
-                  {stream.subjectCount} Subjects
+                  {stream.subjectCount} විෂයන්
                 </p>
               </button>
             ))}
@@ -235,20 +237,20 @@ function SubjectsPage({
                 <article className="subject-card" key={subject.name}>
                   <div className="subject-card-top">
                     <div className="subject-icon">{subject.icon}</div>
-                    <span className="status-pill">Available</span>
+                    <span className="status-pill">ලබාගත හැක</span>
                   </div>
                   <h4>{subject.name}</h4>
                   <p className="subject-subtitle">{subject.subtitle}</p>
                   <p className="subject-meta">
                     <span>
-                      {"\u25eb"} {subject.papers} Papers
+                      {"\u25eb"} {subject.papers} ප්‍රශ්න පත්‍ර
                     </span>
                     <span>
-                      {"\u263a"} {subject.students} Students
+                      {"\u263a"} {subject.students} සිසුන්
                     </span>
                   </p>
                   <button className="view-lessons-btn" type="button">
-                    View Lessons
+                    පාඩම් බලන්න
                   </button>
                 </article>
               ))}
