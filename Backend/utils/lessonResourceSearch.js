@@ -1,201 +1,196 @@
 const LessonResource = require("../models/LessonResource");
+
 const BIOLOGY_LESSON_2_ID = "69fecad43aa30c9941247cd9";
+
+const preferredTopics = [
+  {
+    title: "Competitive Inhibitors",
+    terms: ["competitive inhibitor", "competitive inhibition", "competitive", "tharagakari", "තරඟකාරී"],
+  },
+  {
+    title: "Non-competitive Inhibitors",
+    terms: ["non competitive", "non-competitive", "allosteric", "noncompetitive", "තරඟකාරී නොවන"],
+  },
+  {
+    title: "Temperature Effect on Enzymes",
+    terms: ["temperature", "temp", "ushnathwa", "උෂ්ණත්ව"],
+  },
+  {
+    title: "pH Effect on Enzymes",
+    terms: ["ph", "p h", "පීඑච්", "අම්ල", "ක්ෂාර"],
+  },
+  {
+    title: "Enzyme Inhibitors",
+    terms: ["inhibitor", "inhibition", "නිෂේධක", "නිෂේධනය"],
+  },
+  {
+    title: "Enzyme Active Site and Substrate",
+    terms: ["active site", "substrate", "enzyme substrate", "ක්‍රියාකාරී ස්ථානය", "උපස්තර"],
+  },
+  {
+    title: "Enzyme Properties",
+    terms: ["enzyme properties", "properties", "guna", "ගුණ"],
+  },
+  {
+    title: "ATP Hydrolysis",
+    terms: [
+      "hydrolysis",
+      "breakdown",
+      "break down",
+      "break",
+      "bindi",
+      "bindina",
+      "bindunama",
+      "kaduna",
+      "adp",
+      "pi",
+      "energy release",
+      "release energy",
+      "අකාබනික",
+      "පොස්ෆේට්",
+      "ජලවිච්ඡේදනය",
+      "බිඳ",
+      "කැඩ",
+    ],
+  },
+  {
+    title: "Phosphorylation Types",
+    terms: ["phosphorylation", "photophosphorylation", "oxidative", "substrate level", "පොස්ෆොරිලීකරණ"],
+  },
+  {
+    title: "DNA vs RNA",
+    terms: ["dna vs rna", "dna and rna", "dna rna", "ඩීඑන්ඒ", "ආර්එන්ඒ"],
+  },
+  { title: "Nucleic Acids", terms: ["nucleic", "nucleotide", "න්‍යෂ්ටික"] },
+  { title: "Carbohydrates", terms: ["carbohydrate", "glucose", "starch", "කාබෝහයිඩ්‍රේට", "ග්ලූකෝස්"] },
+  { title: "Lipids", terms: ["lipid", "fat", "oil", "ලිපිඩ", "මේද"] },
+  { title: "Proteins", terms: ["protein", "amino", "peptide", "ප්‍රෝටීන", "ඇමයිනෝ"] },
+  { title: "Mitochondria", terms: ["mitochondria", "respiration", "මයිටොකොන්ඩ්‍රියා"] },
+  { title: "Chloroplast", terms: ["chloroplast", "photosynthesis", "හරිතලව", "ප්‍රභාසංශ්ලේෂණ"] },
+  { title: "Mitosis", terms: ["mitosis", "මයිටෝසිස්"] },
+  { title: "Meiosis", terms: ["meiosis", "මියෝසිස්"] },
+  { title: "ATP", terms: ["atp", "adenosine", "triphosphate", "ඇඩිනොසින්"] },
+  { title: "Enzymes", terms: ["enzyme", "enzymes", "එන්සයිම", "උත්ප්‍රේරක"] },
+];
+
+const extraAliases = {
+  atp: ["energy", "shakthi", "ශක්තිය", "adp", "pi"],
+  bindi: ["hydrolysis", "breakdown", "adp", "pi", "energy"],
+  bindina: ["hydrolysis", "breakdown", "adp", "pi", "energy"],
+  bindunama: ["hydrolysis", "breakdown", "adp", "pi", "energy"],
+  breakdown: ["hydrolysis", "adp", "pi", "energy"],
+  enzyme: ["enzymes", "catalyst", "එන්සයිම", "උත්ප්‍රේරක"],
+  enzymes: ["enzyme", "catalyst", "එන්සයිම", "උත්ප්‍රේරක"],
+  carbohydrate: ["glucose", "starch", "glycogen", "කාබෝහයිඩ්‍රේට"],
+  lipid: ["fat", "oil", "phospholipid", "ලිපිඩ", "මේද"],
+  protein: ["amino", "peptide", "ප්‍රෝටීන"],
+  dna: ["rna", "nucleic", "genetic"],
+  rna: ["dna", "nucleic", "genetic"],
+};
 
 function tokenize(text) {
   return String(text || "")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
-    .filter((word) => word.length >= 3)
-    .slice(0, 40);
-}
-
-function escapeRegex(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function messageIncludesAny(text, terms) {
-  return terms.some((term) => text.includes(term));
+    .filter((word) => word.length >= 2)
+    .slice(0, 50);
 }
 
 function getPreferredCleanTitle(message) {
   const text = String(message || "").toLowerCase();
-  const sinhalaEnzyme = "\u0d91\u0db1\u0dca\u0dc3\u0dba\u0dd2\u0db8";
-  const sinhalaPh = "\u0db4\u0dd3\u0d91\u0da0\u0dca";
-  const sinhalaTemperature = "\u0d8b\u0dc2\u0dca\u0dab\u0dad\u0dca\u0dc0";
-  const asksEnergyRelease = messageIncludesAny(text, [
-    "energy release",
-    "release energy",
-    "energy",
-    "shakthi",
-    "shakthiya",
-    "release",
-    "නිදහස්",
-    "ශක්ති",
-    "ශක්තිය",
-  ]);
-  const asksFunction = messageIncludesAny(text, [
-    "function",
-    "role",
-    "work",
-    "activity",
-    "karya",
-    "kaarya",
-    "karaya",
-    "mokakda",
-    "\u0d9a\u0dcf\u0dbb\u0dca\u0dba",
-    "\u0d9a\u0dcf\u0dbb\u0dca\u0dba\u0dba",
-    "\u0db8\u0ddc\u0d9a\u0d9a\u0dca\u0daf",
-  ]);
-
-  if (messageIncludesAny(text, ["competitive inhibitor", "competitive inhibition"])) {
-    return "Competitive Inhibitors";
-  }
-  if (messageIncludesAny(text, ["non competitive", "non-competitive", "allosteric"])) {
-    return "Non-competitive Inhibitors";
-  }
-  if (messageIncludesAny(text, ["denaturation", "denature"])) {
-    return "Enzyme Denaturation";
-  }
-  if (messageIncludesAny(text, ["temperature", sinhalaTemperature])) {
-    return "Temperature Effect on Enzymes";
-  }
-  if (messageIncludesAny(text, ["ph", sinhalaPh])) {
-    return "pH Effect on Enzymes";
-  }
-  if (messageIncludesAny(text, ["enzyme activity", "reaction rate"]) || (asksFunction && messageIncludesAny(text, ["enzyme", "enzymes", sinhalaEnzyme]))) {
-    return "Enzyme Activity";
-  }
-  if (messageIncludesAny(text, ["hydrolysis", "adp", "pi"]) || (text.includes("atp") && asksEnergyRelease)) {
-    return "ATP Hydrolysis";
-  }
-  if (messageIncludesAny(text, [
-    "phosphate",
-    "pospate",
-    "pospet",
-    "fosfate",
-    "fosfet",
-    "akabanika",
-    "akabanik",
-    "\u0d85\u0d9a\u0dcf\u0db6\u0db1\u0dd2\u0d9a",
-    "\u0db4\u0ddc\u0dc3\u0dca\u0dc6\u0dda\u0da7\u0dca",
-  ])) {
-    return "ATP Hydrolysis";
-  }
-  if (messageIncludesAny(text, ["atp"])) {
-    return "ATP - Adenosine Triphosphate";
-  }
-  if (messageIncludesAny(text, ["enzyme", "enzymes", sinhalaEnzyme])) {
-    return "Enzymes";
-  }
-
-  return "";
+  const topic = preferredTopics.find((item) => item.terms.some((term) => text.includes(term.toLowerCase())));
+  return topic ? topic.title : "";
 }
-
-const biologyAliases = {
-  "ජීව": ["biology", "ôj", "ôùka"],
-  "විද්‍යාව": ["science", "úohdj", "úoHdj"],
-  "ජීවවිද්‍යාව": ["biology", "ôj", "úohdj", "úoHdj"],
-  "සෛල": ["cell", "ffi,"],
-  "රසායනික": ["chemical", "ridhk"],
-  "ජීවීන්": ["organisms", "ôùka"],
-  "පරිසර": ["environment", "mßir"],
-  "පරිණාම": ["evolution"],
-  "ශාක": ["plant", "Ydl"],
-  "සත්ත්ව": ["animal", "i;a;aj"],
-};
 
 function expandSearchWords(words, originalMessage = "") {
   const expanded = new Set(words);
   const rawMessage = String(originalMessage || "").toLowerCase();
+
   words.forEach((word) => {
-    const compactWord = word.replace(/\s+/g, "");
-    (biologyAliases[word] || biologyAliases[compactWord] || []).forEach((alias) => {
-      if (alias.length >= 3) expanded.add(alias.toLowerCase());
-    });
+    (extraAliases[word] || []).forEach((alias) => expanded.add(alias.toLowerCase()));
   });
 
-  const phrase = `${words.join("")} ${rawMessage}`;
-  if (phrase.includes("ජීව") && phrase.includes("විද්")) {
-    ["biology", "ôj", "úohdj", "úoHdj"].forEach((alias) => expanded.add(alias.toLowerCase()));
-  }
-  Object.entries(biologyAliases).forEach(([term, aliases]) => {
-    if (rawMessage.includes(term)) {
-      aliases.forEach((alias) => {
-        if (alias.length >= 3) expanded.add(alias.toLowerCase());
+  preferredTopics.forEach((topic) => {
+    if (topic.terms.some((term) => rawMessage.includes(term.toLowerCase()))) {
+      expanded.add(topic.title.toLowerCase());
+      topic.terms.forEach((term) => {
+        tokenize(term).forEach((word) => expanded.add(word));
       });
     }
   });
 
-  return [...expanded].slice(0, 60);
+  return [...expanded].slice(0, 80);
 }
 
-function scoreResource(resource, words) {
+function scoreResource(resource, words, preferredTitle = "") {
   const title = String(resource.title || "").toLowerCase();
+  const sinhalaTitle = String(resource.sinhalaTitle || "").toLowerCase();
   const keywords = (resource.keywords || []).join(" ").toLowerCase();
-  const haystack = [title, resource.unit, resource.content, keywords].join(" ").toLowerCase();
+  const content = String(resource.content || "").toLowerCase();
+  const haystack = [title, sinhalaTitle, keywords, content].join(" ");
 
-  const matchScore = words.reduce((score, word) => score + (haystack.includes(word) ? 1 : 0), 0);
-  const titleBoost = words.reduce((score, word) => score + (title.includes(word) ? 12 : 0), 0);
-  const keywordBoost = words.reduce((score, word) => score + (keywords.includes(word) ? 8 : 0), 0);
-  const topicPenalty =
-    title.includes("hydrolysis") && !words.some((word) => ["hydrolysis", "breakdown", "adp", "pi"].includes(word))
-      ? 18
-      : 0;
-  const cleanBoost = resource.type === "clean-summary" ? 100 : 0;
-  return cleanBoost + titleBoost + keywordBoost + matchScore - topicPenalty;
+  const exactTitleBoost = preferredTitle && title === preferredTitle.toLowerCase() ? 300 : 0;
+  const titleBoost = words.reduce(
+    (score, word) => score + (title.includes(word) || sinhalaTitle.includes(word) ? 18 : 0),
+    0
+  );
+  const keywordBoost = words.reduce((score, word) => score + (keywords.includes(word) ? 12 : 0), 0);
+  const contentScore = words.reduce((score, word) => score + (haystack.includes(word) ? 1 : 0), 0);
+
+  return exactTitleBoost + titleBoost + keywordBoost + contentScore;
 }
 
-async function searchResources(words, filter) {
-  const cleanFilter = {
-    ...filter,
-    type: "clean-summary",
-    $or: words.map((word) => ({
-      keywords: { $regex: escapeRegex(word), $options: "i" },
-    })),
-  };
-
-  let resources = await LessonResource.find(cleanFilter).limit(12).lean();
+async function findByTextOrAll(filter, words) {
+  if (!words.length) return LessonResource.find(filter).limit(80).lean();
 
   try {
-    const textResources = await LessonResource.find(
-      {
-        ...filter,
-        $text: { $search: words.join(" ") },
-      },
-      { score: { $meta: "textScore" } }
+    const textMatches = await LessonResource.find(
+      { ...filter, $text: { $search: words.join(" ") } },
+      { textScore: { $meta: "textScore" } }
     )
-      .sort({ score: { $meta: "textScore" } })
-      .limit(12)
+      .sort({ textScore: { $meta: "textScore" } })
+      .limit(30)
       .lean();
-    resources = [...resources, ...textResources];
+
+    if (textMatches.length) return textMatches;
   } catch (error) {
-    const fallbackResources = await LessonResource.find(filter).limit(80).lean();
-    resources = [...resources, ...fallbackResources];
+    // Text indexes can lag on local/dev databases. Scoring all scoped docs is a safe fallback.
   }
 
-  if (!resources.length) {
-    resources = await LessonResource.find(filter).limit(80).lean();
-  }
-
-  const uniqueResources = [...new Map(resources.map((resource) => [String(resource._id), resource])).values()];
-
-  return uniqueResources
-    .map((resource) => ({
-      ...resource,
-      relevance: (resource.score || 0) + scoreResource(resource, words),
-    }))
-    .filter((resource) => resource.relevance > 0)
-    .sort((a, b) => {
-      if (a.type === "clean-summary" && b.type !== "clean-summary") return -1;
-      if (a.type !== "clean-summary" && b.type === "clean-summary") return 1;
-      return b.relevance - a.relevance;
-    });
+  return LessonResource.find(filter).limit(80).lean();
 }
 
-async function findRelevantLessonResources(message, options = {}) {
-  const words = expandSearchWords(tokenize(message), message);
+async function searchCleanResources(words, filter, preferredTitle) {
+  const cleanFilter = { ...filter, type: "clean-summary" };
+  const resources = await findByTextOrAll(cleanFilter, words);
+
+  return resources
+    .map((resource) => ({
+      ...resource,
+      relevance: scoreResource(resource, words, preferredTitle),
+    }))
+    .filter((resource) => resource.relevance > 0 || resource.title === preferredTitle)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, 3);
+}
+
+async function searchPdfFallback(words, filter) {
+  const resources = await findByTextOrAll({ ...filter, type: { $ne: "clean-summary" } }, words);
+
+  return resources
+    .map((resource) => ({
+      ...resource,
+      relevance: scoreResource(resource, words),
+    }))
+    .filter((resource) => resource.relevance > 0)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, 3);
+}
+
+async function findRelevantLessonResources(message) {
   const preferredTitle = getPreferredCleanTitle(message);
+  const words = expandSearchWords(tokenize(message), message);
   const filter = { lesson: BIOLOGY_LESSON_2_ID };
 
   if (preferredTitle) {
@@ -205,17 +200,16 @@ async function findRelevantLessonResources(message, options = {}) {
       title: preferredTitle,
     }).lean();
 
-    if (preferredResource && words.length === 0) return [preferredResource];
-
-    const resources = words.length > 0 ? await searchResources(words, filter) : [];
-    const merged = preferredResource ? [preferredResource, ...resources] : resources;
-    return [...new Map(merged.map((resource) => [String(resource._id), resource])).values()].slice(0, 3);
+    const cleanMatches = await searchCleanResources(words, filter, preferredTitle);
+    const merged = preferredResource ? [preferredResource, ...cleanMatches] : cleanMatches;
+    const unique = [...new Map(merged.map((resource) => [String(resource._id), resource])).values()];
+    if (unique.length) return unique.slice(0, 3);
   }
 
-  if (words.length === 0) return [];
+  const cleanResources = await searchCleanResources(words, filter, preferredTitle);
+  if (cleanResources.length) return cleanResources;
 
-  const resources = await searchResources(words, filter);
-  return resources.slice(0, 3);
+  return searchPdfFallback(words, filter);
 }
 
 function buildResourceContext(resources = []) {
@@ -224,7 +218,8 @@ function buildResourceContext(resources = []) {
   return resources
     .map((resource, index) => {
       const sourceName = resource.source || resource.sourcePdf || "Lesson resource";
-      const source = `${resource.title} (${sourceName}${resource.pageRange ? `, ${resource.pageRange}` : ""})`;
+      const title = resource.sinhalaTitle || resource.title;
+      const source = `${title} (${sourceName}${resource.pageRange ? `, ${resource.pageRange}` : ""})`;
       return `Context ${index + 1} - ${source}\n${resource.content}`;
     })
     .join("\n\n");

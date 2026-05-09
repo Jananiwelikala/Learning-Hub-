@@ -408,11 +408,14 @@ async function answerFromCleanResources(message, resources = []) {
   if (!context) return "";
 
   const prompt = [
-    "You are a Sinhala medium A/L Biology tutor.",
-    "Use ONLY the given Unit 2 context to reason and answer.",
-    "Answer in Sinhala. Keep only unavoidable abbreviations such as ATP, ADP, Pi and pH.",
+    "You are a Sinhala medium Sri Lankan A/L Biology tutor.",
+    "Use the given Biology context when it is relevant.",
+    "If the context is not enough to answer the student's understanding question, use your own correct A/L Biology knowledge.",
+    "Answer in Sinhala if the student asks Sinhala. Keep only unavoidable abbreviations such as ATP, ADP, Pi, DNA, RNA and pH.",
+    "Do not simply repeat the context. Answer the exact question the student asked.",
     "For understanding questions, explain the cause-process-result clearly.",
-    "Give 3-5 complete Sinhala points. Do not give only a definition.",
+    "Give 3-5 clear exam-focused Sinhala points. Do not give only a definition.",
+    "If the question is not Biology, say you can help with A/L Biology and platform questions.",
     "Do not stop mid-sentence.",
     "",
     context,
@@ -431,6 +434,46 @@ async function answerFromCleanResources(message, resources = []) {
           temperature: 0.2,
           topP: 0.85,
           maxOutputTokens: 650,
+        },
+      }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) return "";
+
+  return data?.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
+}
+
+async function answerFromGeneralBiology(message) {
+  if (!process.env.GEMINI_API_KEY) return "";
+
+  const prompt = [
+    "You are a Sinhala medium Sri Lankan A/L Biology tutor.",
+    "Answer using your own correct A/L Biology knowledge.",
+    "Answer in Sinhala. Keep only unavoidable abbreviations such as ATP, ADP, Pi, DNA, RNA and pH.",
+    "For understanding questions, explain the reason and process clearly.",
+    "Give 3-5 clear exam-focused points. Do not give only a definition.",
+    "Do not mix long English phrases into the Sinhala answer.",
+    "If the question is not Biology, say you can help with A/L Biology and platform questions.",
+    "",
+    `Student question: ${message}`,
+  ].join("\n");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.35,
+          topP: 0.9,
+          maxOutputTokens: 800,
         },
       }),
     }
@@ -559,6 +602,9 @@ function isBiologyQuestion(message) {
     "triphosphate",
     "adp",
     "phosphate",
+    "pi",
+    "hydrolysis",
+    "phosphorylation",
     "රසායනික",
     "සෛල",
     "cell",
@@ -566,8 +612,17 @@ function isBiologyQuestion(message) {
     "protein",
     "carbohydrate",
     "lipid",
+    "fat",
+    "amino",
     "enzyme",
     "dna",
+    "rna",
+    "nucleic",
+    "mitochondria",
+    "chloroplast",
+    "mitosis",
+    "meiosis",
+    "photosynthesis",
     "molecule",
     "organic",
     "genetic",
@@ -1132,9 +1187,19 @@ async function postChatMessage(req, res) {
           lessonId: userMessage.lesson,
           subjectId: userMessage.subject,
         });
-        const cleanAnswer = getFunctionIntentReply(resolvedMessage, cleanResources) || await answerFromCleanResources(chatContext.combinedMessage, cleanResources);
+        const hasCleanSummary = cleanResources.some((resource) => resource.type === "clean-summary");
+        const cleanAnswer =
+          getFunctionIntentReply(resolvedMessage, cleanResources) ||
+          (await answerFromCleanResources(resolvedMessage, cleanResources));
+
         if (cleanAnswer && !isWeakPdfAnswer(cleanAnswer)) {
           pdfAssistantText = cleanAnswer;
+          pdfResources = cleanResources;
+        } else if (hasCleanSummary) {
+          pdfAssistantText = await answerFromGeneralBiology(resolvedMessage);
+          if (!pdfAssistantText || isWeakPdfAnswer(pdfAssistantText)) {
+            pdfAssistantText = buildNoteBasedReply(cleanResources);
+          }
           pdfResources = cleanResources;
         }
       }
@@ -1144,26 +1209,20 @@ async function postChatMessage(req, res) {
       if (!isBiologyQuestion(resolvedMessage)) {
         pdfAssistantText = STUDY_ASSISTANT_ONLY_REPLY;
       } else {
-        try {
-          pdfAssistantText = await answerFromBiologyUnit2Pdf(chatContext.combinedMessage);
-          if (isWeakPdfAnswer(pdfAssistantText)) {
-            throw new Error("Gemini PDF answer was too short");
-          }
-          pdfResources = [
-            {
-              title: "Biology Unit 2 PDF",
-              sourcePdf: "/notes/biology-lesson-2.pdf",
-              pageRange: "",
-            },
-          ];
-        } catch (error) {
-          pdfResources = await findRelevantLessonResources(resolvedMessage, {
-            lessonId: userMessage.lesson,
-            subjectId: userMessage.subject,
-          });
-          pdfAssistantText = pdfResources.length
-            ? getFunctionIntentReply(resolvedMessage, pdfResources) || makeSinhalaMediumFallback(pdfResources)
-            : getDirectUnit2Reply(message) || LESSON_2_ONLY_REPLY;
+        pdfResources = await findRelevantLessonResources(resolvedMessage, {
+          lessonId: userMessage.lesson,
+          subjectId: userMessage.subject,
+        });
+        if (pdfResources.length) {
+          pdfAssistantText =
+            getFunctionIntentReply(resolvedMessage, pdfResources) ||
+            (await answerFromGeneralBiology(resolvedMessage)) ||
+            buildNoteBasedReply(pdfResources);
+        } else {
+          pdfAssistantText =
+            getDirectUnit2Reply(message) ||
+            (await answerFromGeneralBiology(resolvedMessage)) ||
+            LESSON_2_ONLY_REPLY;
         }
       }
     }
@@ -1214,8 +1273,8 @@ async function postChatMessage(req, res) {
           try {
             const prompt = [
               "You are Learning Hub AI Assistant for Sri Lankan A/L Biology students.",
-              "Prototype scope: answer ONLY using Biology Unit 2 / Lesson 2 notes context.",
-              "Answer in Sinhala if the student asks in Sinhala. Use Sinhala + English terms naturally.",
+              "Use the lesson context when it is relevant. If context is not enough, use your own correct A/L Biology knowledge.",
+              "Answer in Sinhala if the student asks in Sinhala. Avoid long English phrases unless the term is unavoidable.",
               "Give useful A/L exam-focused answers. For explanation questions, include at least 3 concise bullet points.",
               "Do not reply with only one short phrase. Give definition, key idea, and exam use when relevant.",
               "For 'ATP කියන්නේ මොකක්ද?', explain definition, structure, and function.",

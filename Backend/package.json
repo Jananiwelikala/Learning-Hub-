@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "cleanup:legacy-lessons": "node cleanupLegacyLessons.js",
     "ingest:biology-notes": "node ingestBiologyNotes.js",
+    "seed:biology-unit2-clean": "node seedCleanBiologyUnit2Resources.js",
     "test": "echo \"No tests\""
   },
   "keywords": [],
