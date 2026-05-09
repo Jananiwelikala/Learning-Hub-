@@ -1,3 +1,8 @@
+const {
+  findRelevantLessonResources,
+  buildResourceContext,
+} = require("../utils/lessonResourceSearch");
+
 const GEMINI_MODEL = "gemini-3-flash-preview";
 
 const SYSTEM_PROMPT = [
@@ -46,6 +51,27 @@ async function chatWithAssistant(req, res) {
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   try {
+    const resources = await findRelevantLessonResources(message, {
+      subjectId: req.body?.subjectId,
+      lessonId: req.body?.lessonId,
+    });
+    const resourceContext = buildResourceContext(resources);
+    const contextualMessage = resourceContext
+      ? [
+          "Use the following Biology lesson note context as the main source for the answer.",
+          "If the context is not enough, say what is missing briefly.",
+          "",
+          resourceContext,
+          "",
+          `Student question: ${message}`,
+        ].join("\n")
+      : [
+          "No matching Biology note context was found in lessonresources.",
+          "Answer generally and include this note: teacher confirmation may be needed.",
+          "",
+          `Student question: ${message}`,
+        ].join("\n");
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -59,7 +85,7 @@ async function chatWithAssistant(req, res) {
           ...history,
           {
             role: "user",
-            parts: [{ text: message }],
+            parts: [{ text: contextualMessage }],
           },
         ],
         generationConfig: {
@@ -86,7 +112,14 @@ async function chatWithAssistant(req, res) {
       });
     }
 
-    return res.json({ reply });
+    return res.json({
+      reply,
+      sources: resources.map((resource) => ({
+        title: resource.title,
+        sourcePdf: resource.sourcePdf,
+        pageRange: resource.pageRange,
+      })),
+    });
   } catch (error) {
     return res.status(500).json({
       message: "Failed to contact the AI assistant",

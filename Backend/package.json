@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "cleanup:legacy-lessons": "node cleanupLegacyLessons.js",
+    "ingest:biology-notes": "node ingestBiologyNotes.js",
     "test": "echo \"No tests\""
   },
   "keywords": [],
@@ -20,7 +21,8 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.1.5"
+    "mongoose": "^9.1.5",
+    "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

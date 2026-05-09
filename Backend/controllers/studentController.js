@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const fs = require("fs/promises");
+const path = require("path");
 const User = require("../models/User");
 const Stream = require("../models/Stream");
 const Subject = require("../models/Subject");
@@ -12,6 +14,15 @@ const PastPaper = require("../models/PastPaper");
 const StudentProgress = require("../models/StudentProgress");
 const ChatMessage = require("../models/ChatMessage");
 const MCQAttempt = require("../models/MCQAttempt");
+const {
+  findRelevantLessonResources,
+  buildResourceContext,
+} = require("../utils/lessonResourceSearch");
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const BIOLOGY_UNIT_2_PDF_PATH = path.resolve(__dirname, "../../frontend/public/notes/biology-lesson-2.pdf");
+
+let biologyUnit2PdfBase64 = null;
 
 function ok(res, data, status = 200) {
   return res.status(status).json({ success: true, data });
@@ -26,7 +37,24 @@ function isObjectId(value) {
 }
 
 function normalizeAnswer(value) {
+  if (value && typeof value === "object") {
+    return String(value.label ?? value.value ?? value.text ?? "").trim().toLowerCase();
+  }
   return String(value ?? "").trim().toLowerCase();
+}
+
+function getOptionLabel(option, index) {
+  if (option && typeof option === "object") {
+    return String(option.label ?? option.value ?? index + 1);
+  }
+  return String(index + 1);
+}
+
+function getOptionText(option) {
+  if (option && typeof option === "object") {
+    return String(option.text ?? option.label ?? option.value ?? "");
+  }
+  return String(option ?? "");
 }
 
 function getCorrectAnswer(mcq) {
@@ -35,7 +63,7 @@ function getCorrectAnswer(mcq) {
   }
 
   if (typeof mcq.correctOptionIndex === "number" && Array.isArray(mcq.options)) {
-    return mcq.options[mcq.correctOptionIndex] ?? mcq.correctOptionIndex;
+    return getOptionLabel(mcq.options[mcq.correctOptionIndex], mcq.correctOptionIndex);
   }
 
   return "";
@@ -52,19 +80,23 @@ function isAnswerCorrect(selectedAnswer, correctAnswer, options = []) {
     return true;
   }
 
-  const optionIndex = options.findIndex((option) => normalizeAnswer(option) === selected);
+  const optionIndex = options.findIndex((option, index) =>
+    normalizeAnswer(option) === selected ||
+    normalizeAnswer(getOptionLabel(option, index)) === selected ||
+    normalizeAnswer(getOptionText(option)) === selected
+  );
   if (optionIndex >= 0 && normalizeAnswer(optionIndex) === correct) {
     return true;
   }
 
   const letters = ["a", "b", "c", "d", "e"];
   const selectedLetterIndex = letters.indexOf(selected);
-  if (selectedLetterIndex >= 0 && normalizeAnswer(options[selectedLetterIndex]) === correct) {
+  if (selectedLetterIndex >= 0 && normalizeAnswer(getOptionText(options[selectedLetterIndex])) === correct) {
     return true;
   }
 
   const correctLetterIndex = letters.indexOf(correct);
-  if (correctLetterIndex >= 0 && normalizeAnswer(options[correctLetterIndex]) === selected) {
+  if (correctLetterIndex >= 0 && normalizeAnswer(getOptionText(options[correctLetterIndex])) === selected) {
     return true;
   }
 
@@ -81,7 +113,10 @@ function cleanMcq(mcq, includeAnswer = false) {
     questionNumber: mcq.questionNumber || 0,
     year: mcq.year || mcq.examYear || null,
     questionText: mcq.questionText || mcq.question || "",
-    options: mcq.options || [],
+    options: (mcq.options || []).map((option, index) => ({
+      label: getOptionLabel(option, index),
+      text: getOptionText(option),
+    })),
     difficulty: mcq.difficulty || "",
   };
 
@@ -109,6 +144,448 @@ function cleanUser(user) {
     subject: user.subject || "",
     createdAt: user.createdAt,
   };
+}
+
+function buildNoteBasedReply(resources = []) {
+  if (!resources.length) {
+    return [
+      "මට මේ ප්‍රශ්නයට අදාල Biology notes context එකක් හමු වුණේ නැහැ.",
+      "සාමාන්‍ය පිළිතුරක්: කරුණාකර ප්‍රශ්නය lesson එකට අදාල keywords සමඟ නැවත අහන්න. අවශ්‍ය නම් ගුරුවරයෙකුගෙන් තහවුරු කරගන්න.",
+    ].join(" ");
+  }
+
+  const cleanResources = resources.filter((resource) => resource.type === "clean-summary");
+  if (cleanResources.length) {
+    const primary = cleanResources[0];
+    return primary.content;
+  }
+
+  const points = resources
+    .slice(0, 2)
+    .map((resource) => {
+      const firstSentences = String(resource.content || "")
+        .replace(/\s+/g, " ")
+        .split(/(?<=[.!?])\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(" ");
+      return firstSentences || String(resource.content || "").replace(/\s+/g, " ").slice(0, 360);
+    })
+    .filter(Boolean);
+
+  const sources = resources
+    .map((resource) => resource.sourcePdf)
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(", ");
+
+  return [
+    "ඔබේ notes වලින් හමු වූ කරුණු අනුව:",
+    points.join(" "),
+    sources ? `Source: ${sources}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+const LESSON_2_ONLY_REPLY =
+  "මෙම chatbot prototype එක දැනට Biology Unit 2 සඳහා පමණක් සකසා ඇත. කරුණාකර Unit 2 සම්බන්ධ ප්‍රශ්නයක් අහන්න.";
+
+const STUDY_ASSISTANT_ONLY_REPLY =
+  "මම Learning Hub A/L study assistant කෙනෙක්. කරුණාකර A/L Biology Unit 2 හෝ platform use කිරීම ගැන ප්‍රශ්නයක් අහන්න.";
+
+function includesAny(text, words) {
+  return words.some((word) => text.includes(word));
+}
+
+function getPlatformHelpReply(message) {
+  const text = String(message || "").toLowerCase();
+
+  if (includesAny(text, ["lesson", "lessons", "පාඩම්", "පාඩම"])) {
+    return "Lessons බලන්න Subjects → lesson එක click කරන්න.";
+  }
+
+  if (includesAny(text, ["note", "notes", "pdf", "download", "සටහන්", "බාගත"])) {
+    return "Notes download කරන්න lesson page එකෙන් PDF button click කරන්න.";
+  }
+
+  if (includesAny(text, ["mcq", "quiz", "practice", "පුහුණුව"])) {
+    return "MCQ practice කරන්න Past Papers section එකට යන්න.";
+  }
+
+  if (includesAny(text, ["past paper", "past papers", "paper", "papers", "ප්‍රශ්න පත්‍ර"])) {
+    return "Past papers බලන්න Past Papers menu එකට යන්න.";
+  }
+
+  if (includesAny(text, ["video", "videos", "වීඩියෝ"])) {
+    return "Video lessons බලන්න lesson page එකේ Video Lesson section එක use කරන්න.";
+  }
+
+  if (includesAny(text, ["class", "classes", "teacher", "ගුරු", "පන්තිය", "පන්ති"])) {
+    return "Class details බලන්න Classes menu එකට යන්න.";
+  }
+
+  return "";
+}
+
+function getDirectUnit2Reply(message) {
+  const text = String(message || "").toLowerCase();
+  if (text.includes("atp") && (text.includes("full form") || text.includes("stands for"))) {
+    return "ATP හි සම්පූර්ණ නම Adenosine Triphosphate ය. සිංහලෙන් එය ඇඩිනොසින් ට්‍රයිෆොස්ෆේට් ලෙස හඳුන්වයි.";
+  }
+
+  return "";
+}
+
+function getRecentChatContext(req, currentMessage) {
+  const explicitHistory = Array.isArray(req.body.history)
+    ? req.body.history
+        .map((item) => `${item.role || "message"}: ${item.text || item.message || ""}`.trim())
+        .filter(Boolean)
+        .slice(-6)
+        .join("\n")
+    : "";
+
+  const combined = [explicitHistory, currentMessage].filter(Boolean).join("\n");
+  return {
+    explicitHistory,
+    combinedMessage: combined || currentMessage,
+  };
+}
+
+function resolveFollowUpMessage(message, historyText = "") {
+  const text = String(message || "").toLowerCase();
+  const context = String(historyText || "").toLowerCase();
+
+  const asksPhosphate =
+    text.includes("pospate") ||
+    text.includes("pospet") ||
+    text.includes("phosphate") ||
+    text.includes("akabanika") ||
+    text.includes("\u0d85\u0d9a\u0dcf\u0db6\u0db1\u0dd2\u0d9a") ||
+    text.includes("\u0db4\u0ddc\u0dc3\u0dca\u0dc6\u0dda\u0da7\u0dca");
+
+  if (asksPhosphate && (context.includes("atp") || context.includes("adp") || context.includes("pi"))) {
+    return `ATP ADP Pi අකාබනික පොස්ෆේට් ගැන follow-up: ${message}`;
+  }
+
+  return message;
+}
+
+function getFollowUpDirectReply(message, historyText = "") {
+  const text = String(message || "").toLowerCase();
+  const context = String(historyText || "").toLowerCase();
+  const asksPhosphate =
+    text.includes("pospate") ||
+    text.includes("pospet") ||
+    text.includes("phosphate") ||
+    text.includes("akabanika") ||
+    text.includes("\u0d85\u0d9a\u0dcf\u0db6\u0db1\u0dd2\u0d9a") ||
+    text.includes("\u0db4\u0ddc\u0dc3\u0dca\u0dc6\u0dda\u0da7\u0dca");
+
+  if (asksPhosphate && (context.includes("atp") || context.includes("adp") || context.includes("pi"))) {
+    return [
+      "අකාබනික පොස්ෆේට් (Pi) යනු ATP බිඳීමේදී ADP සමඟ වෙන් වන පොස්ෆේට් කණ්ඩයයි.",
+      "ATP → ADP + Pi ලෙස බිඳෙන විට මෙම Pi වෙන්වීමත් සමඟ ශක්තිය නිදහස් වේ.",
+      "එම නිදහස් වන ශක්තිය සෛලීය ක්‍රියාවලීන් සඳහා භාවිතා වේ.",
+    ].join("\n");
+  }
+
+  return "";
+}
+
+function makeSinhalaMediumFallback(resources = []) {
+  const primary = resources.find((resource) => resource.type === "clean-summary") || resources[0];
+  if (!primary) return "";
+
+  const title = String(primary.title || "").toLowerCase();
+  if (title.includes("atp -")) {
+    return [
+      "ATP (Adenosine Triphosphate / ඇඩිනොසින් ට්‍රයිෆොස්ෆේට්) යනු සෛලයේ ප්‍රධාන ශක්ති වාහක අණුවයි.",
+      "එය ඇඩිනීන්, රයිබෝස් සීනි සහ පොස්ෆේට් කණ්ඩ 3කින් සමන්විත වේ.",
+      "ATP බිඳී ADP + Pi බවට පත්වන විට ශක්තිය නිදහස් වන අතර, එම ශක්තිය සෛලීය ක්‍රියාවලීන් සඳහා භාවිතා වේ.",
+    ].join("\n");
+  }
+
+  if (title.includes("hydrolysis")) {
+    return [
+      "ATP ජල විච්ඡේදනය යනු ATP අණුව ජලය සමඟ ප්‍රතික්‍රියා කර ADP සහ අකාබනික පොස්ෆේට් (Pi) බවට බිඳීමයි.",
+      "මෙම ක්‍රියාවේදී ශක්තිය නිදහස් වේ.",
+      "එම ශක්තිය සෛලයේ ක්‍රියාකාරකම්, ද්‍රව්‍ය ප්‍රවාහනය සහ සංශ්ලේෂණ ක්‍රියාවලීන් සඳහා භාවිතා වේ.",
+    ].join("\n");
+  }
+
+  if (title.includes("enzyme denaturation")) {
+    return [
+      "එන්සයිම විකෘති වීම යනු එන්සයිමයේ ත්‍රිමාන හැඩය වෙනස් වීමයි.",
+      "උෂ්ණත්වය වැඩි වීම හෝ pH අගය අතිශය ලෙස වෙනස් වීම නිසා සක්‍රීය ස්ථානයේ හැඩය වෙනස් විය හැක.",
+      "එවිට උපස්තරය නිවැරදිව බැඳෙන්නේ නැති නිසා එන්සයිම ක්‍රියාකාරිත්වය අඩු වේ හෝ නවතී.",
+    ].join("\n");
+  }
+
+  if (title.includes("temperature")) {
+    return [
+      "උෂ්ණත්වය එන්සයිම ක්‍රියාකාරිත්වයට බලපායි.",
+      "උෂ්ණත්වය ඉහළ යන විට අණු චලනය වැඩි වී ප්‍රතික්‍රියා වේගය මුලින් වැඩි වේ.",
+      "නමුත් ප්‍රශස්ත උෂ්ණත්වය ඉක්මවා ගිය විට සක්‍රීය ස්ථානය වෙනස් වී එන්සයිමය විකෘති වන නිසා ක්‍රියාකාරිත්වය අඩු වේ.",
+    ].join("\n");
+  }
+
+  if (title.includes("ph effect")) {
+    return [
+      "pH අගය එන්සයිමයේ සක්‍රීය ස්ථානයේ හැඩයට බලපායි.",
+      "සෑම එන්සයිමයකටම ප්‍රශස්ත pH අගයක් ඇති අතර එහිදී ක්‍රියාකාරිත්වය වැඩිම වේ.",
+      "pH අගය අධික ලෙස වෙනස් වුවහොත් සක්‍රීය ස්ථානය වෙනස් වී එන්සයිම ක්‍රියාකාරිත්වය අඩු වේ.",
+    ].join("\n");
+  }
+
+  if (title.includes("competitive")) {
+    return [
+      "තරඟකාරී අවහිරකයක් උපස්තරයට සමාන හැඩයක් ඇති නිසා සක්‍රීය ස්ථානයට බැඳීමට තරඟ කරයි.",
+      "එය සක්‍රීය ස්ථානය අල්ලා ගත් විට උපස්තරය බැඳීමට නොහැකි වේ.",
+      "උපස්තර සාන්ද්‍රණය වැඩි කළ විට මෙම අවහිරකයේ බලපෑම අඩු කළ හැක.",
+    ].join("\n");
+  }
+
+  if (title.includes("non-competitive")) {
+    return [
+      "තරඟකාරී නොවන අවහිරකයක් සක්‍රීය ස්ථානයට නොව වෙනත් ස්ථානයකට බැඳේ.",
+      "එවිට එන්සයිමයේ හැඩය වෙනස් වී සක්‍රීය ස්ථානයද වෙනස් වේ.",
+      "උපස්තර සාන්ද්‍රණය වැඩි කළත් මෙම අවහිරකයේ බලපෑම සාමාන්‍යයෙන් අඩු නොවේ.",
+    ].join("\n");
+  }
+
+  if (title.includes("enzyme activity")) {
+    return [
+      "එන්සයිම ක්‍රියාකාරිත්වය යනු එන්සයිමයක් ප්‍රතික්‍රියාවක් වේගවත් කරන මට්ටමයි.",
+      "එය උපස්තර සාන්ද්‍රණය, එන්සයිම සාන්ද්‍රණය, උෂ්ණත්වය, pH සහ අවහිරක මත රඳා පවතී.",
+      "සක්‍රීය ස්ථාන සියල්ල පිරුණු විට ප්‍රතික්‍රියා වේගය උපරිම අගයකට පැමිණ තවදුරටත් වැඩි නොවේ.",
+    ].join("\n");
+  }
+
+  if (title.includes("enzymes")) {
+    return [
+      "එන්සයිම යනු ජීව සෛල තුළ ඇති ජීව උත්ප්‍රේරක වේ.",
+      "ඒවා ප්‍රතික්‍රියාවකට අවශ්‍ය සක්‍රීයකරණ ශක්තිය අඩු කර ප්‍රතික්‍රියා වේගය වැඩි කරයි.",
+      "එන්සයිමයට විශේෂ සක්‍රීය ස්ථානයක් ඇති අතර, එයට ගැලපෙන උපස්තරය බැඳී එන්සයිම-උපස්තර සංකීර්ණය සෑදේ.",
+    ].join("\n");
+  }
+
+  return buildNoteBasedReply(resources);
+}
+
+function getFunctionIntentReply(message, resources = []) {
+  const text = String(message || "").toLowerCase();
+  const isEnzymeQuestion =
+    text.includes("enzyme") ||
+    text.includes("\u0d91\u0db1\u0dca\u0dc3\u0dba\u0dd2\u0db8");
+  const asksFunction =
+    text.includes("function") ||
+    text.includes("role") ||
+    text.includes("work") ||
+    text.includes("karya") ||
+    text.includes("kaarya") ||
+    text.includes("karaya") ||
+    text.includes("\u0d9a\u0dcf\u0dbb\u0dca\u0dba") ||
+    text.includes("\u0db8\u0ddc\u0d9a\u0d9a\u0dca\u0daf");
+
+  if (!isEnzymeQuestion || !asksFunction) return "";
+
+  return [
+    "එන්සයිමවල ප්‍රධාන කාර්යය වන්නේ සෛල තුළ සිදුවන ජෛව රසායනික ප්‍රතික්‍රියා වේගවත් කිරීමයි.",
+    "ඒවා ප්‍රතික්‍රියාවකට අවශ්‍ය සක්‍රීයකරණ ශක්තිය අඩු කරයි.",
+    "එම නිසා ප්‍රතික්‍රියාව සෛලයට සුදුසු උෂ්ණත්වය සහ pH යටතේ ඉක්මනින් සිදුවේ.",
+    "එන්සයිම ප්‍රතික්‍රියාව අවසානයේ වෙනස් නොවන බැවින් නැවත නැවත භාවිතා කළ හැක.",
+  ].join("\n");
+}
+
+async function answerFromCleanResources(message, resources = []) {
+  if (!process.env.GEMINI_API_KEY || !resources.length) return "";
+
+  const context = buildResourceContext(resources.filter((resource) => resource.type === "clean-summary").length
+    ? resources.filter((resource) => resource.type === "clean-summary")
+    : resources);
+  if (!context) return "";
+
+  const prompt = [
+    "You are a Sinhala medium A/L Biology tutor.",
+    "Use ONLY the given Unit 2 context to reason and answer.",
+    "Answer in Sinhala. Keep only unavoidable abbreviations such as ATP, ADP, Pi and pH.",
+    "For understanding questions, explain the cause-process-result clearly.",
+    "Give 3-5 complete Sinhala points. Do not give only a definition.",
+    "Do not stop mid-sentence.",
+    "",
+    context,
+    "",
+    `Student question: ${message}`,
+  ].join("\n");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          topP: 0.85,
+          maxOutputTokens: 650,
+        },
+      }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) return "";
+
+  return data?.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
+}
+
+async function getBiologyUnit2PdfBase64() {
+  if (!biologyUnit2PdfBase64) {
+    const pdfBuffer = await fs.readFile(BIOLOGY_UNIT_2_PDF_PATH);
+    biologyUnit2PdfBase64 = pdfBuffer.toString("base64");
+  }
+
+  return biologyUnit2PdfBase64;
+}
+
+async function answerFromBiologyUnit2Pdf(message) {
+  if (!process.env.GEMINI_API_KEY) return "";
+
+  const pdfBase64 = await getBiologyUnit2PdfBase64();
+  const prompt = [
+    "You are Learning Hub AI Assistant for Sri Lankan A/L Biology students.",
+    "Read the attached PDF directly. It is Biology Unit 2 / Chemical Basis of Life.",
+    "Answer ONLY using information from this PDF. Do not use outside knowledge unless the PDF is unclear.",
+    "If the answer is not in the PDF, say in Sinhala that the answer was not found in the Unit 2 PDF.",
+    "These are Sinhala medium students. Answer mainly in Sinhala.",
+    "Use Sinhala medium wording. Avoid English terms when Sinhala terms are available.",
+    "Only keep unavoidable symbols/abbreviations such as ATP, ADP, Pi and pH.",
+    "Do not use English terms such as activation energy, active site, enzyme-substrate complex, competitive inhibitor or non-competitive inhibitor. Use Sinhala equivalents.",
+    "Avoid long English phrases or English-only sentences.",
+    "Give A/L exam-focused answers with 3-5 complete points.",
+    "Do not give one short phrase only. Do not stop mid-sentence.",
+    "End with a complete Sinhala sentence.",
+    "For ATP questions, include full form, structure, and role in energy transfer if present in the PDF.",
+    "",
+    `Student question: ${message}`,
+  ].join("\n");
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "application/pdf",
+                  data: pdfBase64,
+                },
+              },
+              { text: prompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.25,
+          topP: 0.85,
+          maxOutputTokens: 900,
+        },
+      }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "Gemini PDF request failed");
+  }
+
+  return data?.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
+}
+
+function isWeakPdfAnswer(reply) {
+  const text = String(reply || "").trim();
+  if (!text) return true;
+  if (text.length < 120) return true;
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 18) return true;
+  if (/[,:;]$/.test(text)) return true;
+  if (/[අ-෿]\s*$/.test(text) && !/[.!?।෴]$/.test(text)) return true;
+  const englishWords = text.match(/[A-Za-z]{4,}/g) || [];
+  const sinhalaChars = text.match(/[අ-෿]/g) || [];
+  return sinhalaChars.length > 0 && englishWords.length > 24;
+}
+
+function isBiologyQuestion(message) {
+  const text = String(message || "").toLowerCase();
+  const sinhalaTerms = [
+    "\u0d91\u0db1\u0dca\u0dc3\u0dba\u0dd2\u0db8",
+    "\u0dc3\u0ddb\u0dbd",
+    "\u0dbb\u0dc3\u0dcf\u0dba\u0db1",
+    "\u0db4\u0ddc\u0dc2\u0dca\u0dc6\u0dda\u0da7\u0dca",
+    "\u0db4\u0dca\u200d\u0dbb\u0ddd\u0da7\u0dd3\u0db1",
+    "\u0dbd\u0dd2\u0db4\u0dd2\u0da9",
+    "\u0d9a\u0dcf\u0db6\u0ddd\u0dc4\u0dba\u0dd2\u0da9\u0dca\u200d\u0dbb\u0dda\u0da7",
+    "\u0d8b\u0dc2\u0dca\u0dab\u0dad\u0dca\u0dc0",
+    "\u0db1\u0dd2\u0dc2\u0dca\u0d9a\u0dca\u200d\u0dbb\u0dd2\u0dba",
+  ];
+
+  if (sinhalaTerms.some((term) => text.includes(term))) return true;
+
+  return includesAny(text, [
+    "biology",
+    "bio",
+    "ජීව",
+    "විද්‍යාව",
+    "unit 2",
+    "lesson 2",
+    "chemical basis",
+    "chemical",
+    "atp",
+    "adenosine",
+    "triphosphate",
+    "adp",
+    "phosphate",
+    "රසායනික",
+    "සෛල",
+    "cell",
+    "water",
+    "protein",
+    "carbohydrate",
+    "lipid",
+    "enzyme",
+    "dna",
+    "molecule",
+    "organic",
+    "genetic",
+    "genetics",
+    "ecology",
+    "evolution",
+    "plant",
+    "animal",
+    "photosynthesis",
+    "respiration",
+    "inheritance",
+    "classification",
+    "ජාන",
+    "පරිසර",
+    "පරිණාම",
+    "ශාක",
+    "සත්ත්ව",
+  ]);
 }
 
 async function getStudent(req) {
@@ -630,6 +1107,8 @@ async function postChatMessage(req, res) {
   try {
     const message = String(req.body.message || "").trim();
     if (!message) return fail(res, 400, "Message is required");
+    const chatContext = getRecentChatContext(req, message);
+    const resolvedMessage = resolveFollowUpMessage(message, chatContext.explicitHistory);
 
     const userMessage = await ChatMessage.create({
       student: req.user.id,
@@ -639,13 +1118,60 @@ async function postChatMessage(req, res) {
       subject: isObjectId(req.body.subjectId) ? req.body.subjectId : null,
     });
 
-    const assistantText =
-      "AI සහාය ලබාගන්න: ඔබේ ප්‍රශ්නය lesson එකට සම්බන්ධ කරලා නැවත කියන්න. මම step by step A/L exam focused explanation එකක් දෙන්නම්.";
+    let pdfResources = [];
+    let pdfAssistantText =
+      getDirectUnit2Reply(message) ||
+      getPlatformHelpReply(message) ||
+      getFollowUpDirectReply(message, chatContext.explicitHistory);
 
-    const assistantMessage = await ChatMessage.create({
+    if (!pdfAssistantText) {
+      if (!isBiologyQuestion(resolvedMessage)) {
+        pdfAssistantText = STUDY_ASSISTANT_ONLY_REPLY;
+      } else {
+        const cleanResources = await findRelevantLessonResources(resolvedMessage, {
+          lessonId: userMessage.lesson,
+          subjectId: userMessage.subject,
+        });
+        const cleanAnswer = getFunctionIntentReply(resolvedMessage, cleanResources) || await answerFromCleanResources(chatContext.combinedMessage, cleanResources);
+        if (cleanAnswer && !isWeakPdfAnswer(cleanAnswer)) {
+          pdfAssistantText = cleanAnswer;
+          pdfResources = cleanResources;
+        }
+      }
+    }
+
+    if (!pdfAssistantText) {
+      if (!isBiologyQuestion(resolvedMessage)) {
+        pdfAssistantText = STUDY_ASSISTANT_ONLY_REPLY;
+      } else {
+        try {
+          pdfAssistantText = await answerFromBiologyUnit2Pdf(chatContext.combinedMessage);
+          if (isWeakPdfAnswer(pdfAssistantText)) {
+            throw new Error("Gemini PDF answer was too short");
+          }
+          pdfResources = [
+            {
+              title: "Biology Unit 2 PDF",
+              sourcePdf: "/notes/biology-lesson-2.pdf",
+              pageRange: "",
+            },
+          ];
+        } catch (error) {
+          pdfResources = await findRelevantLessonResources(resolvedMessage, {
+            lessonId: userMessage.lesson,
+            subjectId: userMessage.subject,
+          });
+          pdfAssistantText = pdfResources.length
+            ? getFunctionIntentReply(resolvedMessage, pdfResources) || makeSinhalaMediumFallback(pdfResources)
+            : getDirectUnit2Reply(message) || LESSON_2_ONLY_REPLY;
+        }
+      }
+    }
+
+    const pdfAssistantMessage = await ChatMessage.create({
       student: req.user.id,
       role: "assistant",
-      message: assistantText,
+      message: pdfAssistantText,
       lesson: userMessage.lesson,
       subject: userMessage.subject,
     });
@@ -654,11 +1180,106 @@ async function postChatMessage(req, res) {
       res,
       {
         userMessage,
-        assistantMessage,
-        reply: assistantText,
+        assistantMessage: pdfAssistantMessage,
+        reply: pdfAssistantText,
+        sources: pdfResources.map((resource) => ({
+          title: resource.title,
+          sourcePdf: resource.sourcePdf,
+          pageRange: resource.pageRange,
+        })),
       },
       201
     );
+
+    let scopedResources = [];
+    let scopedAssistantText = getPlatformHelpReply(message);
+    if (!scopedAssistantText) {
+      scopedAssistantText = getDirectUnit2Reply(message);
+    }
+
+    if (!scopedAssistantText) {
+      scopedResources = await findRelevantLessonResources(message, {
+        lessonId: userMessage.lesson,
+        subjectId: userMessage.subject,
+      });
+
+      if (!scopedResources.length) {
+        scopedAssistantText = isBiologyQuestion(message) ? LESSON_2_ONLY_REPLY : STUDY_ASSISTANT_ONLY_REPLY;
+      } else {
+        const scopedContext = buildResourceContext(scopedResources);
+        scopedAssistantText = buildNoteBasedReply(scopedResources);
+        const hasCleanSummary = scopedResources.some((resource) => resource.type === "clean-summary");
+
+        if (!hasCleanSummary && process.env.GEMINI_API_KEY) {
+          try {
+            const prompt = [
+              "You are Learning Hub AI Assistant for Sri Lankan A/L Biology students.",
+              "Prototype scope: answer ONLY using Biology Unit 2 / Lesson 2 notes context.",
+              "Answer in Sinhala if the student asks in Sinhala. Use Sinhala + English terms naturally.",
+              "Give useful A/L exam-focused answers. For explanation questions, include at least 3 concise bullet points.",
+              "Do not reply with only one short phrase. Give definition, key idea, and exam use when relevant.",
+              "For 'ATP කියන්නේ මොකක්ද?', explain definition, structure, and function.",
+              "For 'ATP full form', answer: Adenosine Triphosphate / ඇඩිනොසින් ට්‍රයිෆොස්ෆේට්.",
+              "Some Sinhala notes were extracted from legacy-font PDFs. Useful mappings: Ôj úoHdj = ජීව විද්‍යාව, Ôùka = ජීවීන්, úoHdj = විද්‍යාව, ridhk = රසායනික, ffi, = සෛල.",
+              "",
+              scopedContext,
+              "",
+              `Student question: ${message}`,
+            ].join("\n");
+
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ role: "user", parts: [{ text: prompt }] }],
+                  generationConfig: {
+                    temperature: 0.4,
+                    topP: 0.9,
+                    maxOutputTokens: 350,
+                  },
+                }),
+              }
+            );
+
+            const data = await response.json();
+            const reply = data?.candidates?.[0]?.content?.parts
+              ?.map((part) => part.text || "")
+              .join("")
+              .trim();
+
+            if (response.ok && reply) scopedAssistantText = reply;
+          } catch (error) {
+            scopedAssistantText = buildNoteBasedReply(scopedResources);
+          }
+        }
+      }
+    }
+
+    const scopedAssistantMessage = await ChatMessage.create({
+      student: req.user.id,
+      role: "assistant",
+      message: scopedAssistantText,
+      lesson: userMessage.lesson,
+      subject: userMessage.subject,
+    });
+
+    return ok(
+      res,
+      {
+        userMessage,
+        assistantMessage: scopedAssistantMessage,
+        reply: scopedAssistantText,
+        sources: scopedResources.map((resource) => ({
+          title: resource.title,
+          sourcePdf: resource.sourcePdf,
+          pageRange: resource.pageRange,
+        })),
+      },
+      201
+    );
+
   } catch (error) {
     return fail(res, 500, "Failed to save chatbot message");
   }

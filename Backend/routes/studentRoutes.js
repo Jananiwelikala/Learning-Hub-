@@ -13,6 +13,8 @@ router.get("/dashboard", studentController.getDashboard);
 router.get("/subjects", studentController.getSubjects);
 router.get("/lessons/:subjectId", studentController.getLessonsBySubject);
 router.get("/lesson/:lessonId", studentController.getLessonDetails);
+router.get("/mcqs/lesson/:lessonId", studentController.getMcqsByLesson);
+router.post("/mcqs/submit", studentController.submitMcqSet);
 router.post("/mcq/submit", studentController.submitMcq);
 router.get("/progress", studentController.getProgress);
 router.post("/structured-answer/submit", studentController.submitStructuredAnswer);

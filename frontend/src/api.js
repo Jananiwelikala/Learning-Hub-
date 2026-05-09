@@ -434,6 +434,74 @@ export async function getStudentLessons(token, subjectId) {
   }
 }
 
+export async function getStudentMcqsByLesson(token, lessonId) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/mcqs/lesson/${lessonId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, mcqs: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to fetch MCQ questions' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function submitStudentMcqs(token, payload) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/mcqs/submit`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, result: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to submit MCQ answers' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function sendStudentChatMessage(token, payload) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/chatbot/message`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to send chat message' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 export async function getQuestionsForLesson(token, lessonId, questionType = null) {
   try {
     const queryParams = new URLSearchParams();

@@ -8,6 +8,7 @@ import {
   getStudentLessons,
   getStudentMcqsByLesson,
   submitStudentMcqs,
+  sendStudentChatMessage,
   getSubjects,
 } from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
@@ -20,6 +21,11 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [isAiMaximized, setIsAiMaximized] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [aiMessages, setAiMessages] = useState([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
   const [selectedClassPost, setSelectedClassPost] = useState(null);
   const [selectedNews, setSelectedNews] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
@@ -423,6 +429,12 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       : "Bio Science";
   const currentStream = streamSubjectMap[selectedStream];
   const normalizeName = (value) => String(value || "").trim().toLowerCase();
+  const getMcqOptionLabel = (option, index) =>
+    typeof option === "object" ? String(option.label ?? option.value ?? index + 1) : String(index + 1);
+  const getMcqOptionText = (option) =>
+    typeof option === "object" ? String(option.text ?? option.label ?? option.value ?? "") : String(option ?? "");
+  const getMcqAnswerText = (answer) =>
+    typeof answer === "object" ? String(answer.text ?? answer.label ?? answer.value ?? "") : String(answer ?? "");
   const findStudentSubjectRecord = (subjectName) =>
     studentSubjectRecords.find((record) => normalizeName(record.name) === normalizeName(subjectName));
   const currentSubjects = currentStream.subjects.map((subject) => {
@@ -574,18 +586,8 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const paperYears = [2024, 2023, 2022, 2021, 2020];
   const paperTypeLabels = { mcq: "MCQ", structured: "Structured", essay: "Essay" };
   const currentPapers = [
-    {
-      title: `${paperTypeLabels[selectedPaperType]} Paper - Part A`,
-      questions: selectedPaperType === "mcq" ? 40 : 5,
-      duration: selectedPaperType === "mcq" ? 60 : 90,
-      difficulty: "Medium",
-    },
-    {
-      title: `${paperTypeLabels[selectedPaperType]} Paper - Part B`,
-      questions: selectedPaperType === "mcq" ? 40 : 5,
-      duration: selectedPaperType === "mcq" ? 60 : 90,
-      difficulty: "Hard",
-    },
+    { title: "MCQ Paper - Part A", questions: 40, duration: 60, difficulty: "Medium" },
+    { title: "MCQ Paper - Part B", questions: 40, duration: 60, difficulty: "Hard" },
   ];
   const homeLessons = [...ongoingLessons, ...extraLessons]
     .filter((lesson) => currentSubjectSet.has(lesson.subject))
@@ -737,8 +739,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   }
 
   async function handleStartMcqPractice() {
-    if (selectedPaperType !== "mcq") return;
-
     const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
     if (!lessonId) {
       setMcqError("Lesson id is missing.");
@@ -793,6 +793,62 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       setMcqError(result.error || "Failed to submit MCQ answers.");
     }
     setMcqLoading(false);
+  }
+
+  async function handleSendAiMessage(nextMessage) {
+    const message = String(nextMessage ?? aiInput).trim();
+    if (!message || aiLoading) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setAiError("Please login again to use AI assistant.");
+      return;
+    }
+
+    const userMessage = { role: "user", text: message };
+    setAiMessages((prev) => [...prev, userMessage]);
+    setAiInput("");
+    setAiLoading(true);
+    setAiError("");
+
+    const result = await sendStudentChatMessage(token, {
+      message,
+      history: aiMessages.slice(-6),
+      lessonId: selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id || null,
+      subjectId: selectedSubject?.id || selectedSubject?.dbSubject?._id || null,
+    });
+
+    if (result.success) {
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: result.data?.reply || "I could not generate an answer right now.",
+        },
+      ]);
+    } else {
+      setAiError(result.error || "Failed to send your question.");
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "Sorry, I could not send that question. Please try again.",
+        },
+      ]);
+    }
+
+    setAiLoading(false);
+  }
+
+  function renderChatText(text) {
+    return String(text || "")
+      .split(/(\*\*[^*]+\*\*)/g)
+      .map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={index}>{part}</span>;
+      });
   }
 
   function handleUpdateProfile(key, value) {
@@ -1149,6 +1205,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <span className="resource-icon papers">▥</span>
           <h3>Past Papers • පසුගිය ප්‍රශ්න පත්‍ර</h3>
         </div>
+        <div className="simple-mcq-start-card">
+          <div>
+            <h4>MCQ පුහුණුව</h4>
+            <p>MongoDB එකේ තියෙන MCQ ප්‍රශ්න වලට පිළිතුරු දෙන්න.</p>
+          </div>
+          <button type="button" onClick={handleStartMcqPractice}>
+            Start MCQ Practice
+          </button>
+        </div>
         <div className="paper-selector">
           <strong>Select Year • වර්ෂය තෝරන්න</strong>
           <div className="paper-year-row">
@@ -1185,12 +1250,101 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
               </div>
               <p>ⓘ {paper.questions} Questions &nbsp; ◷ {paper.duration} min</p>
               <div className="paper-actions">
-                <button type="button" className="start">⊙ Start</button>
+                <button
+                  type="button"
+                  className="start"
+                  onClick={selectedPaperType === "mcq" ? handleStartMcqPractice : undefined}
+                >
+                  ⊙ Start
+                </button>
                 <button type="button" className="pdf">↓ PDF</button>
               </div>
             </article>
           ))}
         </div>
+        {showMcqPractice && (
+          <div className="mcq-practice-panel">
+            <div className="mcq-practice-head">
+              <div>
+                <h3>MCQ පුහුණුව</h3>
+                <p>{selectedLearningLesson.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMcqPractice(false);
+                  setMcqResult(null);
+                  setMcqError("");
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            {mcqLoading && <LoadingSpinner message="Loading MCQs..." />}
+            {mcqError && <ErrorMessage message={mcqError} showIcon={false} />}
+
+            {!mcqLoading && mcqQuestions.length > 0 && (
+              <div className="mcq-question-list">
+                {mcqQuestions.map((question, index) => {
+                  const questionId = question._id || question.id;
+                  const resultItem = mcqResult?.results?.find((item) => String(item.questionId) === String(questionId));
+                  return (
+                    <article className="mcq-question-card" key={questionId}>
+                      <div className="mcq-question-top">
+                        <strong>Question {question.questionNumber || index + 1}</strong>
+                        {question.year && <span>{question.year}</span>}
+                      </div>
+                      <h4>{question.questionText}</h4>
+                      <p className="mcq-label">පිළිතුර තෝරන්න</p>
+                      <div className="mcq-options">
+                        {(question.options || []).map((option, optionIndex) => (
+                          <label key={`${questionId}-${optionIndex}`} className="mcq-option">
+                            <input
+                              type="radio"
+                              name={`mcq-${questionId}`}
+                              value={getMcqOptionLabel(option, optionIndex)}
+                              checked={mcqAnswers[questionId] === getMcqOptionLabel(option, optionIndex)}
+                              disabled={Boolean(mcqResult)}
+                              onChange={() =>
+                                setMcqAnswers((prev) => ({
+                                  ...prev,
+                                  [questionId]: getMcqOptionLabel(option, optionIndex),
+                                }))
+                              }
+                            />
+                            <span>{getMcqOptionLabel(option, optionIndex)}. {getMcqOptionText(option)}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {resultItem && (
+                        <div className={resultItem.isCorrect ? "mcq-feedback correct" : "mcq-feedback wrong"}>
+                          <strong>{resultItem.isCorrect ? "නිවැරදි පිළිතුර" : "වැරදි පිළිතුර"}</strong>
+                          <p>Correct answer: {getMcqAnswerText(resultItem.correctAnswer)}</p>
+                          {resultItem.explanation && <p>{resultItem.explanation}</p>}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            {!mcqLoading && mcqQuestions.length > 0 && !mcqResult && (
+              <button type="button" className="mcq-submit-btn" onClick={handleSubmitMcqPractice}>
+                පිළිතුරු යවන්න
+              </button>
+            )}
+
+            {mcqResult && (
+              <div className="mcq-score-card">
+                <span>ඔබේ ලකුණු</span>
+                <strong>{mcqResult.score} / {mcqResult.total}</strong>
+                <p>{mcqResult.percentage}%</p>
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -2029,20 +2183,62 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       )}
 
       {showAiPanel && (
-        <div className="ai-chat-panel">
+        <div className={`ai-chat-panel ${isAiMaximized ? "maximized" : ""}`}>
           <div className="ai-chat-head">
             <div>
               <strong>AI සහාය ලබාගන්න</strong>
               <small>ඔබේ දුර්වල තැන් හඳුනාගන්න</small>
             </div>
-            <button type="button" onClick={() => setShowAiPanel(false)}>×</button>
+            <div className="ai-chat-actions">
+              <button
+                type="button"
+                aria-label={isAiMaximized ? "Minimize chatbot" : "Maximize chatbot"}
+                title={isAiMaximized ? "Minimize" : "Maximize"}
+                onClick={() => setIsAiMaximized((prev) => !prev)}
+              >
+                {isAiMaximized ? "−" : "□"}
+              </button>
+              <button type="button" aria-label="Close chatbot" onClick={() => setShowAiPanel(false)}>×</button>
+            </div>
           </div>
           <div className="ai-chat-body">
+            {aiMessages.map((chatMessage, index) => (
+              <p
+                key={`${chatMessage.role}-${index}`}
+                className={chatMessage.role === "user" ? "ai-user-message" : "ai-assistant-message"}
+              >
+                {renderChatText(chatMessage.text)}
+              </p>
+            ))}
+            {aiLoading && <p className="ai-assistant-message">පිළිතුර සූදානම් කරනවා...</p>}
+            {aiError && <p className="ai-error-message">{aiError}</p>}
             <p>ආයුබෝවන්! ඔබේ A/L විෂයන් ගැන අහන්න. ඔබේ දුර්වල තැන් හඳුනාගන්න මම උදව් කරන්නම්.</p>
           </div>
           <div className="ai-chat-input">
-            <input placeholder="Ask anything... / ප්‍රශ්නයක් අසන්න..." />
-            <button type="button">➤</button>
+            <input
+              placeholder="Ask anything... / ප්‍රශ්නයක් අසන්න..."
+              onChange={(event) => setAiInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const message = event.currentTarget.value;
+                  event.currentTarget.value = "";
+                  handleSendAiMessage(message);
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={aiLoading}
+              onClick={(event) => {
+                const input = event.currentTarget.parentElement?.querySelector("input");
+                const message = input?.value || "";
+                if (input) input.value = "";
+                handleSendAiMessage(message);
+              }}
+            >
+              Send
+            </button>
           </div>
         </div>
       )}
@@ -3783,6 +3979,183 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           padding: 0 22px;
         }
 
+        .lesson-resource-view .paper-selector,
+        .lesson-resource-view .paper-resource-grid {
+          display: none;
+        }
+
+        .simple-mcq-start-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          border: 1px solid #e9d5ff;
+          border-radius: 16px;
+          background: #faf5ff;
+          padding: 22px;
+        }
+
+        .simple-mcq-start-card h4 {
+          margin: 0 0 6px;
+          color: #1e1b4b;
+          font-size: 24px;
+        }
+
+        .simple-mcq-start-card p {
+          margin: 0;
+          color: #4c1d95;
+          font-weight: 700;
+        }
+
+        .simple-mcq-start-card button {
+          border: 0;
+          border-radius: 12px;
+          min-height: 50px;
+          padding: 0 24px;
+          color: #ffffff;
+          background: linear-gradient(135deg, #7c3aed, #0f9b8a);
+          font-size: 17px;
+          font-weight: 800;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .mcq-practice-panel {
+          margin-top: 28px;
+          border: 1px solid rgba(124, 58, 237, 0.18);
+          border-radius: 18px;
+          background: #faf5ff;
+          padding: 24px;
+        }
+
+        .mcq-practice-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+
+        .mcq-practice-head h3 {
+          margin: 0;
+          color: #4c1d95;
+          font-size: 28px;
+        }
+
+        .mcq-practice-head p {
+          margin: 6px 0 0;
+          color: #64748b;
+          font-weight: 700;
+        }
+
+        .mcq-practice-head button,
+        .mcq-submit-btn {
+          border: 0;
+          border-radius: 999px;
+          background: linear-gradient(135deg, #7c3aed, #c084fc);
+          color: #ffffff;
+          min-height: 44px;
+          padding: 0 22px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .mcq-question-list {
+          display: grid;
+          gap: 18px;
+        }
+
+        .mcq-question-card {
+          border: 1px solid rgba(124, 58, 237, 0.14);
+          border-radius: 16px;
+          background: #ffffff;
+          padding: 20px;
+        }
+
+        .mcq-question-top {
+          display: flex;
+          justify-content: space-between;
+          color: #7c3aed;
+          font-weight: 800;
+        }
+
+        .mcq-question-card h4 {
+          margin: 12px 0;
+          color: #1e1b4b;
+          font-size: 20px;
+          line-height: 1.5;
+        }
+
+        .mcq-label {
+          margin: 0 0 10px;
+          color: #4c1d95;
+          font-weight: 800;
+        }
+
+        .mcq-options {
+          display: grid;
+          gap: 10px;
+        }
+
+        .mcq-option {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          border: 1px solid #e9d5ff;
+          border-radius: 12px;
+          padding: 12px;
+          color: #1e1b4b;
+          cursor: pointer;
+        }
+
+        .mcq-option input {
+          margin-top: 4px;
+          accent-color: #7c3aed;
+        }
+
+        .mcq-feedback {
+          margin-top: 14px;
+          border-radius: 12px;
+          padding: 14px;
+        }
+
+        .mcq-feedback.correct {
+          background: #dcfce7;
+          color: #166534;
+        }
+
+        .mcq-feedback.wrong {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+
+        .mcq-submit-btn {
+          margin-top: 18px;
+          min-width: 190px;
+        }
+
+        .mcq-score-card {
+          margin-top: 20px;
+          border-radius: 16px;
+          background: #ffffff;
+          border: 1px solid #e9d5ff;
+          padding: 20px;
+          color: #4c1d95;
+        }
+
+        .mcq-score-card span,
+        .mcq-score-card p {
+          margin: 0;
+          font-weight: 800;
+        }
+
+        .mcq-score-card strong {
+          display: block;
+          margin: 8px 0;
+          color: #1e1b4b;
+          font-size: 34px;
+        }
+
         .compact-dashboard {
           display: grid;
           gap: 28px;
@@ -4384,25 +4757,38 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .ai-chat-panel {
           position: fixed;
           right: 28px;
-          bottom: 112px;
-          width: min(400px, calc(100vw - 36px));
-          height: 402px;
+          bottom: 104px;
+          width: min(560px, calc(100vw - 40px));
+          height: min(70vh, 720px);
           border-radius: 16px;
           overflow: hidden;
           background: #f8fafc;
           border: 1px solid #dbe6f4;
           box-shadow: 0 24px 54px rgba(15, 23, 42, 0.18);
           z-index: 35;
+          display: flex;
+          flex-direction: column;
+          transition: width 0.2s ease, height 0.2s ease, right 0.2s ease, bottom 0.2s ease;
+        }
+
+        .ai-chat-panel.maximized {
+          width: min(720px, calc(100vw - 56px));
+          height: 82vh;
+          right: 50%;
+          bottom: 50%;
+          transform: translate(50%, 50%);
         }
 
         .ai-chat-head {
-          height: 70px;
+          min-height: 74px;
           padding: 16px 18px;
           background: linear-gradient(135deg, #2371e8, #0ea5e9);
           color: #ffffff;
           display: flex;
           align-items: center;
           justify-content: space-between;
+          flex: 0 0 auto;
+          gap: 14px;
         }
 
         .ai-chat-head strong,
@@ -4410,52 +4796,152 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           display: block;
         }
 
+        .ai-chat-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
         .ai-chat-head button {
           border: 0;
-          background: transparent;
+          background: rgba(255, 255, 255, 0.14);
           color: #ffffff;
-          font-size: 22px;
+          width: 34px;
+          height: 34px;
+          border-radius: 10px;
+          font-size: 20px;
+          line-height: 1;
           cursor: pointer;
         }
 
         .ai-chat-body {
           padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          scroll-behavior: smooth;
         }
 
         .ai-chat-body p {
           margin: 0;
-          padding: 14px 16px;
+          padding: 15px 17px;
           border: 1px solid #e3eaf5;
           border-radius: 12px;
           background: #ffffff;
           color: #334155;
-          line-height: 1.55;
+          line-height: 1.7;
+          font-size: 15.5px;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+
+        .ai-chat-body strong {
+          font-weight: 800;
+          color: #1e1b4b;
+        }
+
+        .ai-chat-body p:not([class]) {
+          order: 0;
+        }
+
+        .ai-chat-body .ai-user-message,
+        .ai-chat-body .ai-assistant-message,
+        .ai-chat-body .ai-error-message {
+          order: 1;
+        }
+
+        .ai-chat-body .ai-user-message {
+          align-self: flex-end;
+          max-width: 86%;
+          background: #f3e8ff;
+          border-color: #d8b4fe;
+          color: #4c1d95;
+        }
+
+        .ai-chat-body .ai-assistant-message {
+          align-self: flex-start;
+          max-width: 90%;
+        }
+
+        .ai-chat-body .ai-error-message {
+          border-color: #fecaca;
+          background: #fff1f2;
+          color: #991b1b;
         }
 
         .ai-chat-input {
-          position: absolute;
-          left: 16px;
-          right: 16px;
-          bottom: 16px;
+          flex: 0 0 auto;
           display: flex;
           gap: 10px;
+          padding: 14px 16px 16px;
+          border-top: 1px solid #e3eaf5;
+          background: rgba(248, 250, 252, 0.96);
         }
 
         .ai-chat-input input {
           flex: 1;
-          height: 42px;
+          min-width: 0;
+          height: 48px;
           border: 1px solid #dbe6f4;
-          border-radius: 10px;
-          padding: 0 14px;
+          border-radius: 12px;
+          padding: 0 15px;
+          font-size: 15px;
         }
 
         .ai-chat-input button {
-          width: 42px;
+          min-width: 76px;
+          padding: 0 18px;
           border: 0;
-          border-radius: 10px;
+          border-radius: 12px;
           background: #2563eb;
           color: #ffffff;
           cursor: pointer;
+          font-weight: 800;
+          font-size: 15px;
+        }
+
+        .ai-chat-input button:disabled {
+          cursor: not-allowed;
+          opacity: 0.65;
+        }
+
+        @media (max-width: 640px) {
+          .ai-chat-panel,
+          .ai-chat-panel.maximized {
+            right: 3vw;
+            bottom: 92px;
+            width: 94vw;
+            height: 75vh;
+            transform: none;
+            border-radius: 18px;
+          }
+
+          .ai-chat-head {
+            min-height: 68px;
+            padding: 14px;
+          }
+
+          .ai-chat-body {
+            padding: 14px;
+          }
+
+          .ai-chat-body p {
+            font-size: 15px;
+            line-height: 1.7;
+          }
+
+          .ai-chat-input {
+            padding: 12px;
+          }
+
+          .ai-chat-input button {
+            min-width: 66px;
+            padding: 0 12px;
+          }
         }
 
         @media (max-width: 900px) {
