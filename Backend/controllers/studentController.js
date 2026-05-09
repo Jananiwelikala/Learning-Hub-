@@ -11,6 +11,7 @@ const Note = require("../models/Note");
 const PastPaper = require("../models/PastPaper");
 const StudentProgress = require("../models/StudentProgress");
 const ChatMessage = require("../models/ChatMessage");
+const MCQAttempt = require("../models/MCQAttempt");
 
 function ok(res, data, status = 200) {
   return res.status(status).json({ success: true, data });
@@ -22,6 +23,74 @@ function fail(res, status, message) {
 
 function isObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value);
+}
+
+function normalizeAnswer(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function getCorrectAnswer(mcq) {
+  if (mcq.correctAnswer !== undefined && mcq.correctAnswer !== null && mcq.correctAnswer !== "") {
+    return mcq.correctAnswer;
+  }
+
+  if (typeof mcq.correctOptionIndex === "number" && Array.isArray(mcq.options)) {
+    return mcq.options[mcq.correctOptionIndex] ?? mcq.correctOptionIndex;
+  }
+
+  return "";
+}
+
+function isAnswerCorrect(selectedAnswer, correctAnswer, options = []) {
+  const selected = normalizeAnswer(selectedAnswer);
+  const correct = normalizeAnswer(correctAnswer);
+  if (!selected || !correct) return false;
+  if (selected === correct) return true;
+
+  const selectedIndex = Number(selectedAnswer);
+  if (Number.isInteger(selectedIndex) && normalizeAnswer(options[selectedIndex]) === correct) {
+    return true;
+  }
+
+  const optionIndex = options.findIndex((option) => normalizeAnswer(option) === selected);
+  if (optionIndex >= 0 && normalizeAnswer(optionIndex) === correct) {
+    return true;
+  }
+
+  const letters = ["a", "b", "c", "d", "e"];
+  const selectedLetterIndex = letters.indexOf(selected);
+  if (selectedLetterIndex >= 0 && normalizeAnswer(options[selectedLetterIndex]) === correct) {
+    return true;
+  }
+
+  const correctLetterIndex = letters.indexOf(correct);
+  if (correctLetterIndex >= 0 && normalizeAnswer(options[correctLetterIndex]) === selected) {
+    return true;
+  }
+
+  return false;
+}
+
+function cleanMcq(mcq, includeAnswer = false) {
+  const payload = {
+    id: mcq._id,
+    _id: mcq._id,
+    lesson: mcq.lesson,
+    subject: mcq.subject,
+    unit: mcq.unit || "",
+    questionNumber: mcq.questionNumber || 0,
+    year: mcq.year || mcq.examYear || null,
+    questionText: mcq.questionText || mcq.question || "",
+    options: mcq.options || [],
+    difficulty: mcq.difficulty || "",
+  };
+
+  if (includeAnswer) {
+    payload.correctAnswer = getCorrectAnswer(mcq);
+    payload.explanation = mcq.explanation || "";
+  }
+
+  return payload;
 }
 
 function escapeRegex(value) {
@@ -177,7 +246,7 @@ async function getLessonsBySubject(req, res) {
     if (!isObjectId(subjectId)) return fail(res, 400, "Invalid subject id");
 
     const lessons = await Lesson.find({ subject: subjectId })
-      .select("title sinhalaTitle description icon progressPercent videoCount notesCount pastPaperCount order subject createdAt videoLink videoTitle durationMinutes viewCount updatedLabel notesUrl pastPaperMcqUrl pastPaperStructuredUrl pastPaperEssayUrl")
+      .select("title sinhalaTitle description icon progressPercent videoCount notesCount pastPaperCount order subject createdAt videoLink videoUrl videoLinks videoUrls videos videoTitle durationMinutes viewCount updatedLabel notes notesUrl pastPaperMcqUrl pastPaperStructuredUrl pastPaperEssayUrl")
       .populate("subject", "name stream")
       .sort({ order: 1, createdAt: 1 });
 
@@ -283,6 +352,84 @@ async function submitMcq(req, res) {
     });
   } catch (error) {
     return fail(res, 500, "Failed to submit MCQ answer");
+  }
+}
+
+async function getMcqsByLesson(req, res) {
+  try {
+    const { lessonId } = req.params;
+    if (!isObjectId(lessonId)) return fail(res, 400, "Invalid lesson id");
+
+    const mcqs = await MCQ.find({ lesson: lessonId })
+      .sort({ questionNumber: 1, createdAt: 1 })
+      .lean();
+
+    return ok(res, mcqs.map((mcq) => cleanMcq(mcq)));
+  } catch (error) {
+    return fail(res, 500, "Failed to load MCQ questions");
+  }
+}
+
+async function submitMcqSet(req, res) {
+  try {
+    const { lessonId, answers } = req.body;
+    if (!isObjectId(lessonId)) return fail(res, 400, "lessonId is required");
+    if (!Array.isArray(answers)) return fail(res, 400, "answers must be an array");
+
+    const mcqs = await MCQ.find({ lesson: lessonId })
+      .sort({ questionNumber: 1, createdAt: 1 })
+      .lean();
+
+    const answerMap = new Map(
+      answers.map((item) => [String(item.questionId), item.selectedAnswer])
+    );
+
+    let score = 0;
+    const results = mcqs.map((mcq) => {
+      const selectedAnswer = answerMap.get(String(mcq._id)) ?? "";
+      const correctAnswer = getCorrectAnswer(mcq);
+      const isCorrect = isAnswerCorrect(selectedAnswer, correctAnswer, mcq.options || []);
+      if (isCorrect) score += 1;
+
+      return {
+        questionId: mcq._id,
+        questionText: mcq.questionText || mcq.question || "",
+        selectedAnswer,
+        correctAnswer,
+        isCorrect,
+        explanation: mcq.explanation || "",
+      };
+    });
+
+    const total = mcqs.length;
+    const percentage = total ? Math.round((score / total) * 100) : 0;
+
+    await MCQAttempt.create({
+      student: req.user.id,
+      lesson: lessonId,
+      answers: results.map((item) => ({
+        questionId: item.questionId,
+        selectedAnswer: item.selectedAnswer,
+        correctAnswer: item.correctAnswer,
+        isCorrect: item.isCorrect,
+      })),
+      score,
+      total,
+      percentage,
+    });
+
+    await touchProgress({
+      studentId: req.user.id,
+      lessonId,
+      subjectId: mcqs[0]?.subject,
+      progressPercent: percentage >= 80 ? 80 : 45,
+      scorePercent: percentage,
+      isCorrect: null,
+    });
+
+    return ok(res, { score, total, percentage, results });
+  } catch (error) {
+    return fail(res, 500, "Failed to submit MCQ answers");
   }
 }
 
@@ -525,6 +672,8 @@ module.exports = {
   getLessonsBySubject,
   getLessonDetails,
   submitMcq,
+  getMcqsByLesson,
+  submitMcqSet,
   getProgress,
   submitStructuredAnswer,
   getClassPosts,

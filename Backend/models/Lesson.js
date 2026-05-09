@@ -20,11 +20,16 @@ const lessonSchema = new mongoose.Schema(
     },
 
     // These are the "locked" resources
-    videoLink: { type: String, trim: true },
+    videoLink: { type: mongoose.Schema.Types.Mixed },
+    videoUrl: { type: mongoose.Schema.Types.Mixed },
+    videoLinks: [{ type: String, trim: true }],
+    videoUrls: [{ type: String, trim: true }],
+    videos: { type: [mongoose.Schema.Types.Mixed], default: [] },
     videoTitle: { type: String, trim: true },
     durationMinutes: { type: Number, default: 0 },
     viewCount: { type: Number, default: 0 },
     updatedLabel: { type: String, trim: true },
+    notes: { type: [mongoose.Schema.Types.Mixed], default: [] },
     notesUrl: { type: String, trim: true },
     pastPaperMcqUrl: { type: String, trim: true },
     pastPaperStructuredUrl: { type: String, trim: true },

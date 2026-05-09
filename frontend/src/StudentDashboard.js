@@ -1,7 +1,15 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import styles from "./StudentDashboard.module.css";
-import { getApprovedPosts, createComment, getStudentSubjects, getStudentLessons, getSubjects } from "./api";
+import {
+  getApprovedPosts,
+  createComment,
+  getStudentSubjects,
+  getStudentLessons,
+  getStudentMcqsByLesson,
+  submitStudentMcqs,
+  getSubjects,
+} from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
 import EmptyState from "./components/EmptyState";
@@ -18,6 +26,12 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [selectedLearningLesson, setSelectedLearningLesson] = useState(null);
   const [selectedPaperYear, setSelectedPaperYear] = useState(2024);
   const [selectedPaperType, setSelectedPaperType] = useState("mcq");
+  const [showMcqPractice, setShowMcqPractice] = useState(false);
+  const [mcqQuestions, setMcqQuestions] = useState([]);
+  const [mcqAnswers, setMcqAnswers] = useState({});
+  const [mcqResult, setMcqResult] = useState(null);
+  const [mcqLoading, setMcqLoading] = useState(false);
+  const [mcqError, setMcqError] = useState("");
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [classPosts, setClassPosts] = useState([]);
   const [studentSubjectRecords, setStudentSubjectRecords] = useState([]);
@@ -427,13 +441,101 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const currentSubjectNames = currentSubjects.map((subject) => subject.name).join(", ");
   const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
   const getYoutubeEmbedUrl = (url) => {
-    if (!url) return "https://www.youtube.com/embed/URUJD5NEXC8";
+    if (!url) return "";
     const text = String(url);
     const watchMatch = text.match(/[?&]v=([^&]+)/);
     if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}`;
     const shortMatch = text.match(/youtu\.be\/([^?]+)/);
     if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
     return text;
+  };
+  const splitVideoLinks = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.flatMap((item) => splitVideoLinks(item));
+    if (typeof value === "object") {
+      return splitVideoLinks(value.url || value.link || value.videoLink || value.videoUrl || Object.values(value));
+    }
+    const text = String(value);
+    const urls = text.match(/https?:\/\/[^\s,;]+/g);
+    if (urls) return urls;
+    return text
+      .split(/[\n,;]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+  const getLessonVideoItems = (lesson) => {
+    const structuredVideos = Array.isArray(lesson.videos)
+      ? lesson.videos
+          .map((video, index) => ({
+            title:
+              typeof video === "object" && video?.title
+                ? video.title
+                : `${lesson.title} - Video ${index + 1}`,
+            url: getYoutubeEmbedUrl(
+              typeof video === "string"
+                ? video
+                : video?.url || video?.link || video?.videoLink || video?.videoUrl
+            ),
+            duration:
+              typeof video === "object" && video?.durationMinutes
+                ? video.durationMinutes
+                : lesson.durationMinutes || 0,
+          }))
+      : [];
+
+    const linkVideos = [
+      ...splitVideoLinks(lesson.videoLink),
+      ...splitVideoLinks(lesson.videoUrl),
+      ...splitVideoLinks(lesson.videoLinks),
+      ...splitVideoLinks(lesson.videoUrls),
+    ].map((url, index) => ({
+      title: index === 0 && lesson.videoTitle ? lesson.videoTitle : `${lesson.title} - Video ${index + 1}`,
+      url: getYoutubeEmbedUrl(url),
+      duration: lesson.durationMinutes || 0,
+    }));
+
+    const uniqueVideos = [...structuredVideos, ...linkVideos].filter(
+      (video, index, all) => video.url && all.findIndex((item) => item.url === video.url) === index
+    );
+
+    return uniqueVideos;
+  };
+  const getPublicFileUrl = (url) => {
+    if (!url) return "";
+    const text = String(url).trim();
+    if (/^https?:\/\//i.test(text)) return text;
+    return text.startsWith("/") ? text : `/${text}`;
+  };
+  const getLessonNoteItems = (lesson) => {
+    const structuredNotes = Array.isArray(lesson.notes)
+      ? lesson.notes
+          .map((note, index) => {
+            const fileUrl = typeof note === "string" ? note : note?.fileUrl || note?.url || note?.path || note?.notesUrl;
+            return {
+              title:
+                typeof note === "object" && note?.title
+                  ? note.title
+                  : `${lesson.title} Notes ${index + 1}`,
+              sinhalaTitle: typeof note === "object" ? note?.sinhalaTitle || "" : "",
+              fileUrl: getPublicFileUrl(fileUrl),
+              pages: typeof note === "object" ? note?.pages || 0 : 0,
+              size: typeof note === "object" ? note?.fileSize || note?.size || "" : "",
+            };
+          })
+          .filter((note) => note.fileUrl)
+      : [];
+
+    if (structuredNotes.length > 0) return structuredNotes;
+    if (lesson.notesUrl) {
+      return [{
+        title: `${lesson.title} Notes`,
+        sinhalaTitle: "",
+        fileUrl: getPublicFileUrl(lesson.notesUrl),
+        pages: 0,
+        size: "",
+      }];
+    }
+    return [];
   };
   const lessonIconMap = {
     "book-open": "▯",
@@ -449,13 +551,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     sinhala: lesson.sinhalaTitle || lesson.description || "",
     icon: lessonIconMap[lesson.icon] || lesson.icon || "▯",
     progress: lesson.progressPercent ?? 0,
-    videos: lesson.videoCount ?? (lesson.videoLink ? 1 : 0),
-    notes: lesson.notesCount ?? 0,
+    videoItems: getLessonVideoItems(lesson),
+    videos: getLessonVideoItems(lesson).length,
+    noteItems: getLessonNoteItems(lesson),
+    notes: getLessonNoteItems(lesson).length,
     papers: lesson.pastPaperCount ?? 0,
     duration: lesson.durationMinutes || 45,
     views: lesson.viewCount ? Number(lesson.viewCount).toLocaleString() : "0",
     updated: lesson.updatedLabel || (lesson.createdAt ? new Date(lesson.createdAt).toLocaleDateString() : "Recently"),
-    videoUrl: getYoutubeEmbedUrl(lesson.videoLink),
+    videoUrl: getLessonVideoItems(lesson)[0]?.url || "",
     rawLesson: lesson,
   }));
   const selectedLessonCards = dbLessonCards;
@@ -467,11 +571,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     }),
     { videos: 0, notes: 0, papers: 0 }
   );
-  const lessonNotes = [
-    { title: "Cell Structure and Function", pages: 24, size: "2.4 MB" },
-    { title: "Cell Division - Mitosis and Meiosis", pages: 18, size: "1.8 MB" },
-    { title: "Cell Membrane Transport", pages: 15, size: "1.5 MB" },
-  ];
   const paperYears = [2024, 2023, 2022, 2021, 2020];
   const paperTypeLabels = { mcq: "MCQ", structured: "Structured", essay: "Essay" };
   const currentPapers = [
@@ -635,6 +734,65 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       setLessonError(result.error || "Failed to load lessons.");
     }
     setLessonLoading(false);
+  }
+
+  async function handleStartMcqPractice() {
+    if (selectedPaperType !== "mcq") return;
+
+    const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
+    if (!lessonId) {
+      setMcqError("Lesson id is missing.");
+      setShowMcqPractice(true);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setMcqError("Please login again to start MCQ practice.");
+      setShowMcqPractice(true);
+      return;
+    }
+
+    setShowMcqPractice(true);
+    setMcqLoading(true);
+    setMcqError("");
+    setMcqResult(null);
+    setMcqAnswers({});
+
+    const result = await getStudentMcqsByLesson(token, lessonId);
+    if (result.success) {
+      setMcqQuestions(result.mcqs || []);
+      if (!result.mcqs?.length) {
+        setMcqError("No MCQ questions found for this lesson.");
+      }
+    } else {
+      setMcqQuestions([]);
+      setMcqError(result.error || "Failed to load MCQ questions.");
+    }
+    setMcqLoading(false);
+  }
+
+  async function handleSubmitMcqPractice() {
+    const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
+    const token = localStorage.getItem("token");
+    if (!lessonId || !token) return;
+
+    setMcqLoading(true);
+    setMcqError("");
+    const result = await submitStudentMcqs(token, {
+      lessonId,
+      answers: mcqQuestions.map((question) => ({
+        questionId: question._id || question.id,
+        selectedAnswer: mcqAnswers[question._id || question.id] || "",
+      })),
+    });
+
+    if (result.success) {
+      setMcqResult(result.result);
+    } else {
+      setMcqError(result.error || "Failed to submit MCQ answers.");
+    }
+    setMcqLoading(false);
   }
 
   function handleUpdateProfile(key, value) {
@@ -929,15 +1087,29 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <span className="resource-icon video">▹</span>
           <h3>Video Lesson • වීඩියෝ පාඩම</h3>
         </div>
-        <div className="video-frame">
-          <iframe
-            title={`${selectedLearningLesson.title} video`}
-            src={selectedLearningLesson.videoUrl}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          ></iframe>
+        {selectedLearningLesson.videoItems?.length === 0 && (
+          <div className="video-empty-state">
+            No video links added for this lesson yet.
+          </div>
+        )}
+        <div className="video-resource-grid">
+          {(selectedLearningLesson.videoItems || []).map((video, index) => (
+            <article className="video-card" key={`${video.url}-${index}`}>
+              <div className="video-frame">
+                <iframe
+                  title={video.title || `${selectedLearningLesson.title} video ${index + 1}`}
+                  src={video.url}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              </div>
+              <h4>{video.title || `${selectedLearningLesson.title} - Video ${index + 1}`}</h4>
+              {video.duration > 0 && <p>Duration: {video.duration} min</p>}
+            </article>
+          ))}
         </div>
         <div className="video-meta-row">
+          <span>Videos: {(selectedLearningLesson.videoItems || []).length}</span>
           <span>◷ Duration: {selectedLearningLesson.duration} min</span>
           <span>◎ {selectedLearningLesson.views} views</span>
           <span>□ Updated: {selectedLearningLesson.updated}</span>
@@ -949,15 +1121,24 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <span className="resource-icon notes">▤</span>
           <h3>Downloadable Notes • බාගත කළ හැකි සටහන්</h3>
         </div>
+        {selectedLearningLesson.noteItems?.length === 0 && (
+          <div className="video-empty-state">
+            No notes added for this lesson yet.
+          </div>
+        )}
         <div className="notes-resource-grid">
-          {lessonNotes.map((note) => (
-            <article className="note-resource-card" key={note.title}>
+          {(selectedLearningLesson.noteItems || []).map((note) => (
+            <article className="note-resource-card" key={note.fileUrl || note.title}>
               <span>▤</span>
               <div>
                 <h4>{note.title}</h4>
-                <p>□ {note.pages} pages &nbsp; ⊕ {note.size}</p>
+                {note.sinhalaTitle && <p>{note.sinhalaTitle}</p>}
+                <p>{note.pages ? `${note.pages} pages` : "PDF note"}{note.size ? ` · ${note.size}` : ""}</p>
               </div>
-              <button type="button">↓ Download PDF</button>
+              <div className="note-actions">
+                <a href={note.fileUrl} target="_blank" rel="noreferrer">View PDF</a>
+                <a href={note.fileUrl} download>Download PDF</a>
+              </div>
             </article>
           ))}
         </div>
@@ -3370,10 +3551,46 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .resource-icon.notes { background: #ffedd5; color: #f97316; }
         .resource-icon.papers { background: #f3e8ff; color: #9333ea; }
 
+        .video-resource-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(260px, 1fr));
+          gap: 18px;
+        }
+
+        .video-card {
+          border: 1px solid #dbe4ef;
+          border-radius: 14px;
+          background: #ffffff;
+          padding: 14px;
+        }
+
+        .video-card h4 {
+          margin: 12px 0 6px;
+          color: #00163d;
+          font-size: 18px;
+        }
+
+        .video-card p {
+          margin: 0;
+          color: #64748b;
+          font-size: 14px;
+        }
+
+        .video-empty-state {
+          border: 1px dashed #cbd5e1;
+          border-radius: 14px;
+          background: #f8fafc;
+          color: #64748b;
+          padding: 22px;
+          font-size: 16px;
+          font-weight: 700;
+        }
+
         .video-frame {
           width: 100%;
           aspect-ratio: 16 / 9;
-          border-radius: 14px;
+          max-height: 260px;
+          border-radius: 12px;
           overflow: hidden;
           background: #0f172a;
         }
@@ -3440,16 +3657,29 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           color: #334155;
         }
 
-        .note-resource-card button {
+        .note-actions {
           grid-column: 1 / -1;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .note-actions a {
           min-height: 46px;
-          border: 0;
+          border: 1px solid #f97316;
           border-radius: 10px;
-          background: #f97316;
-          color: #ffffff;
+          color: #f97316;
           font-size: 17px;
           font-weight: 800;
-          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          text-decoration: none;
+        }
+
+        .note-actions a:last-child {
+          background: #f97316;
+          color: #ffffff;
         }
 
         .paper-selector {
@@ -4277,6 +4507,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           .stream-subject-grid,
           .biology-lesson-grid,
           .subject-stat-grid,
+          .video-resource-grid,
           .notes-resource-grid,
           .paper-resource-grid {
             grid-template-columns: 1fr;
