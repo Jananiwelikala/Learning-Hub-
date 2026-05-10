@@ -17,7 +17,13 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [user, setUser] = useState(storedUser);
   const [screen, setScreen] = useState(
-    storedUser?.role === "admin" ? "admin" : token ? "dashboard" : "home"
+    storedUser?.role === "admin"
+      ? "admin"
+      : storedUser?.role === "teacher"
+        ? "teacher"
+        : storedUser?.role === "student" && token
+          ? "dashboard"
+          : "home"
   );
   const [selectedRole, setSelectedRole] = useState("student");
   const [selectedSubject, setSelectedSubject] = useState(null);
@@ -52,6 +58,19 @@ function App() {
 
   const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
+  const isStudent = user?.role === "student";
+
+  function openRoleDashboard() {
+    if (user?.role === "admin") {
+      setScreen("admin");
+    } else if (user?.role === "teacher") {
+      setScreen("teacher");
+    } else if (user?.role === "student") {
+      setScreen("dashboard");
+    } else {
+      setScreen("login");
+    }
+  }
 
   return (
     <div className="App">
@@ -80,10 +99,11 @@ function App() {
         <AdminPanel adminName={user.name} onLogout={handleLogout} />
       ) : screen === "teacher" && isTeacher ? (
         <TeacherDashboard teacherName={user.name} onLogout={handleLogout} />
-      ) : screen === "dashboard" && token ? (
+      ) : screen === "dashboard" && token && isStudent ? (
         <StudentDashboard
           onLogout={handleLogout}
           onBackHome={() => setScreen("home")}
+          studentData={user}
         />
       ) : screen === "subjects" ? (
         <SubjectsPage
@@ -137,7 +157,7 @@ function App() {
           onBackHome={() => setScreen("home")}
           onLoginClick={() => setScreen("login")}
           onRegisterClick={() => setScreen("choose-role")}
-          onDashboardClick={() => setScreen("dashboard")}
+          onDashboardClick={openRoleDashboard}
           onViewAllSubjects={() => setScreen("subjects")}
           onAboutClick={() => setScreen("about")}
           onLogout={handleLogout}

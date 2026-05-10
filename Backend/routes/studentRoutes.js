@@ -11,6 +11,7 @@ router.get("/profile", studentController.getProfile);
 router.put("/profile", studentController.updateProfile);
 router.get("/dashboard", studentController.getDashboard);
 router.get("/subjects", studentController.getSubjects);
+router.get("/ongoing-lessons", studentController.getOngoingLessons);
 router.get("/lessons/:subjectId", studentController.getLessonsBySubject);
 router.get("/lesson/:lessonId", studentController.getLessonDetails);
 router.get("/mcqs/lesson/:lessonId", studentController.getMcqsByLesson);

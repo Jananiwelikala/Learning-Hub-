@@ -142,6 +142,7 @@ function cleanUser(user) {
     stream: user.stream || "",
     streamId: user.streamId || null,
     subject: user.subject || "",
+    subjects: user.subjects || [],
     createdAt: user.createdAt,
   };
 }
@@ -677,19 +678,108 @@ async function getSelectedStream(student) {
 async function getStudentSubjects(student) {
   const stream = await getSelectedStream(student);
 
-  if (stream) {
-    const subjects = await Subject.find({ stream: stream._id })
+  const selectedSubjectIds = Array.isArray(student.subjects)
+    ? student.subjects.filter(Boolean)
+    : [];
+
+  if (selectedSubjectIds.length > 0) {
+    const subjects = await Subject.find({ _id: { $in: selectedSubjectIds } })
       .populate("stream", "name description")
       .sort({ order: 1, createdAt: 1 });
-    return { stream, subjects };
+    return { stream: stream || subjects[0]?.stream || null, subjects };
   }
 
-  const subjects = await Subject.find()
-    .populate("stream", "name description")
-    .sort({ order: 1, createdAt: 1 })
-    .limit(12);
+  let subjects = [];
 
-  return { stream: null, subjects };
+  if (stream) {
+    subjects = await Subject.find({ stream: stream._id })
+      .populate("stream", "name description")
+      .sort({ order: 1, createdAt: 1 });
+  } else {
+    subjects = await Subject.find()
+      .populate("stream", "name description")
+      .sort({ order: 1, createdAt: 1 })
+      .limit(12);
+  }
+
+  const preferredSubjectNames = String(student.subject || "")
+    .split(/[,;/|]+/)
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (preferredSubjectNames.length > 0) {
+    const preferredSubjects = subjects.filter((subject) =>
+      preferredSubjectNames.some((name) => subject.name.toLowerCase() === name || subject.name.toLowerCase().includes(name))
+    );
+    if (preferredSubjects.length > 0) {
+      return { stream, subjects: preferredSubjects };
+    }
+  }
+
+  return { stream, subjects };
+}
+
+async function buildActiveSubjects(studentId, subjects) {
+  const subjectIds = subjects.map((subject) => subject._id);
+  if (subjectIds.length === 0) return [];
+
+  const [lessonCounts, progressItems] = await Promise.all([
+    Lesson.aggregate([
+      { $match: { subject: { $in: subjectIds } } },
+      { $group: { _id: "$subject", lessonCount: { $sum: 1 } } },
+    ]),
+    StudentProgress.find({ student: studentId, subject: { $in: subjectIds } }).select("subject completed progressPercent"),
+  ]);
+
+  const lessonCountMap = new Map(lessonCounts.map((item) => [String(item._id), item.lessonCount]));
+  const subjectMap = new Map(subjects.map((subject) => [String(subject._id), subject]));
+  const progressMap = progressItems.reduce((acc, item) => {
+    const subjectId = String(item.subject);
+    if (!acc.has(subjectId)) acc.set(subjectId, { completed: 0, progressTotal: 0, records: 0 });
+    const current = acc.get(subjectId);
+    current.completed += item.completed || item.progressPercent >= 100 ? 1 : 0;
+    current.progressTotal += Number(item.progressPercent || 0);
+    current.records += 1;
+    return acc;
+  }, new Map());
+
+  const activeByName = new Map();
+
+  [...progressMap.keys()].forEach((subjectId) => {
+    const subject = subjectMap.get(subjectId);
+    if (!subject) return;
+    const lessonCount = lessonCountMap.get(subjectId) || 0;
+    const progress = progressMap.get(subjectId) || { completed: 0, progressTotal: 0, records: 0 };
+    const hasRealActivity = progress.completed > 0 || progress.progressTotal > 0;
+    if (!hasRealActivity) return;
+
+    const progressPercent = lessonCount
+      ? Math.round(progress.progressTotal / lessonCount)
+      : 0;
+
+    const activeSubject = {
+      _id: subject._id,
+      name: subject.name,
+      sinhalaName: subject.sinhalaName || "",
+      code: subject.code || "",
+      icon: subject.icon || "",
+      color: subject.color || "",
+      papersCount: subject.papersCount || 0,
+      studentsCount: subject.studentsCount || 0,
+      stream: subject.stream || null,
+      lessonCount,
+      completedLessons: progress.completed,
+      progressPercent: Math.max(0, Math.min(100, progressPercent)),
+    };
+
+    const subjectNameKey = subject.name.trim().toLowerCase();
+    const existingSubject = activeByName.get(subjectNameKey);
+    if (!existingSubject || activeSubject.progressPercent > existingSubject.progressPercent) {
+      activeByName.set(subjectNameKey, activeSubject);
+    }
+  });
+
+  return [...activeByName.values()];
 }
 
 async function touchProgress({ studentId, lessonId, subjectId, progressPercent = 20, scorePercent = null, isCorrect = null }) {
@@ -722,6 +812,82 @@ async function touchProgress({ studentId, lessonId, subjectId, progressPercent =
   );
 }
 
+const lessonCardFields =
+  "title sinhalaTitle description icon progressPercent videoCount notesCount pastPaperCount order subject createdAt updatedAt";
+
+function toOngoingLessonCard(lesson, progress = null) {
+  if (!lesson) return null;
+  const lessonObject = typeof lesson.toObject === "function" ? lesson.toObject() : lesson;
+  const subject = lessonObject.subject || progress?.subject || null;
+  return {
+    _id: lessonObject._id,
+    title: lessonObject.title,
+    sinhalaTitle: lessonObject.sinhalaTitle,
+    description: lessonObject.description,
+    icon: lessonObject.icon,
+    subject,
+    chapter: lessonObject.order ? `Chapter ${String(lessonObject.order).padStart(2, "0")}` : "Chapter",
+    progressPercent: progress?.progressPercent ?? lessonObject.progressPercent ?? 0,
+    status: progress?.status || "not-started",
+    completed: Boolean(progress?.completed),
+    lastAccessedAt: progress?.lastAccessedAt || null,
+    videoCount: lessonObject.videoCount || 0,
+    notesCount: lessonObject.notesCount || 0,
+    pastPaperCount: lessonObject.pastPaperCount || 0,
+  };
+}
+
+async function getBiologySubject(subjectIds = []) {
+  const filter = { name: /^Biology$/i };
+  if (subjectIds.length) filter._id = { $in: subjectIds };
+  return Subject.findOne(filter).select("_id name sinhalaName");
+}
+
+async function buildOngoingLessons(studentId, subjectIds = [], limit = 3) {
+  const biologySubject = await getBiologySubject(subjectIds);
+  const subjectFilter = biologySubject
+    ? [biologySubject._id]
+    : subjectIds;
+
+  const progressFilter = { student: studentId };
+  if (subjectFilter.length) progressFilter.subject = { $in: subjectFilter };
+
+  const progressRows = await StudentProgress.find(progressFilter)
+    .populate({
+      path: "lesson",
+      select: lessonCardFields,
+      populate: { path: "subject", select: "name sinhalaName" },
+    })
+    .populate("subject", "name sinhalaName")
+    .sort({ lastAccessedAt: -1 })
+    .limit(limit);
+
+  const cards = progressRows
+    .map((progress) => toOngoingLessonCard(progress.lesson, progress))
+    .filter(Boolean);
+
+  if (cards.length >= limit) return cards;
+
+  const usedLessonIds = new Set(cards.map((item) => String(item._id)));
+  const lessonFilter = {};
+  if (subjectFilter.length) lessonFilter.subject = { $in: subjectFilter };
+
+  const fallbackLessons = await Lesson.find(lessonFilter)
+    .select(lessonCardFields)
+    .populate("subject", "name sinhalaName")
+    .sort({ order: 1, createdAt: 1 })
+    .limit(limit * 2);
+
+  fallbackLessons.forEach((lesson) => {
+    if (cards.length >= limit) return;
+    if (usedLessonIds.has(String(lesson._id))) return;
+    cards.push(toOngoingLessonCard(lesson));
+    usedLessonIds.add(String(lesson._id));
+  });
+
+  return cards;
+}
+
 async function getProfile(req, res) {
   try {
     const student = await getStudent(req);
@@ -734,7 +900,7 @@ async function getProfile(req, res) {
 
 async function updateProfile(req, res) {
   try {
-    const allowed = ["name", "phone", "stream", "streamId"];
+    const allowed = ["name", "phone", "stream", "streamId", "subject", "subjects"];
     const updates = {};
 
     allowed.forEach((key) => {
@@ -744,8 +910,14 @@ async function updateProfile(req, res) {
     if (updates.name !== undefined) updates.name = String(updates.name).trim();
     if (updates.phone !== undefined) updates.phone = String(updates.phone).trim();
     if (updates.stream !== undefined) updates.stream = String(updates.stream).trim();
+    if (updates.subject !== undefined) updates.subject = String(updates.subject).trim();
     if (updates.streamId && !isObjectId(updates.streamId)) {
       return fail(res, 400, "Invalid stream id");
+    }
+    if (updates.subjects !== undefined) {
+      if (!Array.isArray(updates.subjects)) return fail(res, 400, "Subjects must be an array");
+      const invalidSubjectId = updates.subjects.find((subjectId) => !isObjectId(subjectId));
+      if (invalidSubjectId) return fail(res, 400, "Invalid subject id");
     }
 
     const student = await User.findByIdAndUpdate(req.user.id, updates, {
@@ -766,7 +938,8 @@ async function getSubjects(req, res) {
     if (!student) return fail(res, 404, "Student profile not found");
 
     const { stream, subjects } = await getStudentSubjects(student);
-    return ok(res, { selectedStream: stream, subjects });
+    const activeSubjects = await buildActiveSubjects(req.user.id, subjects);
+    return ok(res, { selectedStream: stream, subjects, activeSubjects });
   } catch (error) {
     return fail(res, 500, "Failed to load student subjects");
   }
@@ -1050,6 +1223,21 @@ async function getProgress(req, res) {
   }
 }
 
+async function getOngoingLessons(req, res) {
+  try {
+    const student = await getStudent(req);
+    if (!student) return fail(res, 404, "Student profile not found");
+
+    const { subjects } = await getStudentSubjects(student);
+    const subjectIds = subjects.map((subject) => subject._id);
+    const ongoingLessons = await buildOngoingLessons(req.user.id, subjectIds, 3);
+
+    return ok(res, ongoingLessons);
+  } catch (error) {
+    return fail(res, 500, "Failed to load ongoing lessons");
+  }
+}
+
 async function getClassPosts(req, res) {
   try {
     const student = await getStudent(req);
@@ -1082,6 +1270,7 @@ async function getDashboard(req, res) {
     const subjectIds = subjects.map((subject) => subject._id);
 
     const [
+      ongoingLessons,
       recentProgress,
       recommendedLessons,
       upcomingClasses,
@@ -1089,6 +1278,7 @@ async function getDashboard(req, res) {
       progressData,
       attempts,
     ] = await Promise.all([
+      buildOngoingLessons(req.user.id, subjectIds, 3),
       StudentProgress.find({ student: req.user.id })
         .populate("lesson", "title description subject")
         .populate("subject", "name")
@@ -1121,6 +1311,8 @@ async function getDashboard(req, res) {
       profile: cleanUser(student),
       selectedStream: stream,
       subjects,
+      activeSubjects: await buildActiveSubjects(req.user.id, subjects),
+      ongoingLessons,
       recentLessons: recentProgress.map((item) => item.lesson).filter(Boolean),
       progressSummary: {
         averageProgress: progressAverage,
@@ -1355,6 +1547,7 @@ module.exports = {
   getMcqsByLesson,
   submitMcqSet,
   getProgress,
+  getOngoingLessons,
   submitStructuredAnswer,
   getClassPosts,
   getChatHistory,

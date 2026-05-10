@@ -6,10 +6,13 @@ import {
   createComment,
   getStudentSubjects,
   getStudentLessons,
+  getStudentOngoingLessons,
+  getStudentLessonDetails,
   getStudentMcqsByLesson,
   submitStudentMcqs,
   sendStudentChatMessage,
   getSubjects,
+  getSubjectLessons,
 } from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
@@ -30,7 +33,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [selectedNews, setSelectedNews] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLearningLesson, setSelectedLearningLesson] = useState(null);
-  const [selectedPaperYear, setSelectedPaperYear] = useState(2024);
+  const [selectedPaperYear, setSelectedPaperYear] = useState(2025);
   const [selectedPaperType, setSelectedPaperType] = useState("mcq");
   const [showMcqPractice, setShowMcqPractice] = useState(false);
   const [mcqQuestions, setMcqQuestions] = useState([]);
@@ -41,7 +44,9 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [classPosts, setClassPosts] = useState([]);
   const [studentSubjectRecords, setStudentSubjectRecords] = useState([]);
+  const [activeSubjectRecords, setActiveSubjectRecords] = useState([]);
   const [studentLessonRecords, setStudentLessonRecords] = useState([]);
+  const [studentOngoingLessons, setStudentOngoingLessons] = useState([]);
   const [lessonLoading, setLessonLoading] = useState(false);
   const [lessonError, setLessonError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -75,6 +80,8 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   useEffect(() => {
     loadClassPosts();
     loadStudentSubjects();
+    loadOngoingLessons();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadStudentSubjects() {
@@ -84,9 +91,51 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     const result = await getStudentSubjects(token);
     if (result.success) {
       setStudentSubjectRecords(result.data?.subjects || []);
+      setActiveSubjectRecords(result.data?.activeSubjects || result.data?.subjects || []);
     }
   }
 
+  async function loadOngoingLessons() {
+    const token = localStorage.getItem("token");
+    if (token) {
+      const result = await getStudentOngoingLessons(token);
+      if (result.success) {
+        setStudentOngoingLessons(result.lessons || []);
+        return;
+      }
+    }
+
+    const biologySubject = await resolveSubjectRecordByName("Biology");
+    if (biologySubject?._id || biologySubject?.id) {
+      const result = await getSubjectLessons(token || "", biologySubject._id || biologySubject.id);
+      if (result.success) {
+        setStudentOngoingLessons((result.lessons || []).slice(0, 3));
+      }
+    }
+  }
+
+  async function resolveSubjectRecordByName(subjectName) {
+    const existingRecord = studentSubjectRecords.find(
+      (record) => normalizeName(record.name) === normalizeName(subjectName)
+    );
+    if (existingRecord) return existingRecord;
+
+    const publicSubjects = await getSubjects();
+    if (!publicSubjects.success) return null;
+
+    const matchedRecord = (publicSubjects.subjects || []).find((record) =>
+      normalizeName(record.name) === normalizeName(subjectName)
+    );
+
+    if (matchedRecord) {
+      setStudentSubjectRecords((prev) => {
+        const exists = prev.some((record) => String(record._id || record.id) === String(matchedRecord._id || matchedRecord.id));
+        return exists ? prev : [...prev, matchedRecord];
+      });
+    }
+
+    return matchedRecord || null;
+  }
   async function loadClassPosts(filters = {}) {
     setLoading(true);
     setError(null);
@@ -105,8 +154,21 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     loadClassPosts(searchFilters);
   }, [searchFilters]);
 
-  const motivationText = "ඔබේ A/L ඉගෙනුම් ගමන අදත් ඉදිරියට ගෙන යමු";
-  const motivationSinhala = "ඉගෙනීම එකම තැනකින්. ඔබේ විභාග සූදානම වැඩි කරගන්න.";
+  const motivationText = "Stay focused. Small daily progress leads to big A/L results.";
+  const getColomboGreeting = () => {
+    const colomboHour = Number(new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Colombo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()));
+
+    if (colomboHour < 12) return "Good Morning";
+    if (colomboHour < 17) return "Good Afternoon";
+    if (colomboHour < 21) return "Good Evening";
+    return "Have a calm study session";
+  };
+  const dashboardGreeting = `${getColomboGreeting()}, ${student.name.split(" ")[0] || student.name}!`;
+  const motivationSinhala = "අද ඔබ තබන සෑම කුඩා පියවරක්ම, හෙට ඔබේ විශිෂ්ට ජයග්‍රහණයට පදනමයි.";
   const alExamDate = new Date("2026-11-25"); // Sample A/L Exam Date
   const today = new Date();
   const daysLeft = Math.ceil((alExamDate - today) / (1000 * 60 * 60 * 24));
@@ -239,35 +301,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     : 0;
   const notificationBadgeText = notificationCount > 99 ? "99+" : String(notificationCount);
 
-  const ongoingLessons = [
-    {
-      id: 1,
-      title: "Newton's Laws of Motion",
-      sinhala: "නිව්ටන්ගේ චලන නීති",
-      subject: "Physics",
-      progress: 68,
-      chapter: "Chapter 02",
-      color: "blue",
-    },
-    {
-      id: 2,
-      title: "Chemical bonding",
-      sinhala: "රසායනික බන්ධන",
-      subject: "Chemistry",
-      progress: 45,
-      chapter: "Chapter 03",
-      color: "green",
-    },
-    {
-      id: 3,
-      title: "Photosynthesis",
-      sinhala: "ප්‍රභාසංස්ලේෂණය",
-      subject: "Biology",
-      progress: 82,
-      chapter: "Chapter 01",
-      color: "teal",
-    },
-  ];
+  const ongoingLessons = [];
 
   const newClasses = [
     {
@@ -300,16 +334,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       tag: "Online",
       color: "purple",
     },
-  ];
-
-  const extraLessons = [
-    { id: 4, title: "Cell Biology", sinhala: "සෛල ජීව විද්‍යාව", subject: "Biology", progress: 58, chapter: "Chapter 04", color: "teal" },
-    { id: 5, title: "Vectors and Algebra", sinhala: "දෛශික හා බීජ ගණිතය", subject: "Combined Mathematics", progress: 42, chapter: "Chapter 02", color: "orange" },
-    { id: 6, title: "Programming Fundamentals", sinhala: "ක්‍රමලේඛන මූලධර්ම", subject: "ICT", progress: 73, chapter: "Chapter 01", color: "sky" },
-    { id: 7, title: "Final Accounts", sinhala: "අවසාන ගිණුම්", subject: "Accounting", progress: 64, chapter: "Chapter 05", color: "green" },
-    { id: 8, title: "Market Economy", sinhala: "වෙළෙඳපොළ ආර්ථිකය", subject: "Economics", progress: 55, chapter: "Chapter 03", color: "orange" },
-    { id: 9, title: "Political Ideologies", sinhala: "දේශපාලන වාද", subject: "Political Science", progress: 61, chapter: "Chapter 02", color: "blue" },
-    { id: 10, title: "Science for Technology Basics", sinhala: "තාක්ෂණවේදය සඳහා විද්‍යාව", subject: "Science for Technology", progress: 52, chapter: "Chapter 01", color: "green" },
   ];
 
   const [showAiBubble] = useState(true);
@@ -437,12 +461,32 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     typeof answer === "object" ? String(answer.text ?? answer.label ?? answer.value ?? "") : String(answer ?? "");
   const findStudentSubjectRecord = (subjectName) =>
     studentSubjectRecords.find((record) => normalizeName(record.name) === normalizeName(subjectName));
-  const currentSubjects = currentStream.subjects.map((subject) => {
+  const dbSubjectsForCurrentStream = studentSubjectRecords.filter((record) => {
+    const streamName = record.stream?.name || selectedStream;
+    return normalizeName(streamName) === normalizeName(selectedStream);
+  });
+  const dbSubjectCards = dbSubjectsForCurrentStream.map((record) => ({
+    name: record.name,
+    sinhala: record.sinhalaName || record.name,
+    icon: record.icon || "□",
+    papers: record.papersCount ?? 0,
+    students: record.studentsCount ?? 0,
+    color: record.color || currentStream.color,
+    id: record._id || record.id,
+    dbSubject: record,
+  }));
+  const baseCurrentSubjects = [
+    ...currentStream.subjects,
+    ...dbSubjectCards.filter((record) =>
+      !currentStream.subjects.some((subject) => normalizeName(subject.name) === normalizeName(record.name))
+    ),
+  ];
+  const currentSubjects = baseCurrentSubjects.map((subject) => {
     const record = findStudentSubjectRecord(subject.name);
     return {
       ...subject,
-      id: record?._id || record?.id,
-      dbSubject: record || null,
+      id: subject.id || record?._id || record?.id,
+      dbSubject: subject.dbSubject || record || null,
       sinhala: record?.sinhalaName || subject.sinhala,
       papers: record?.papersCount ?? subject.papers,
       students: record?.studentsCount ?? subject.students,
@@ -450,6 +494,72 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       color: record?.color || subject.color,
     };
   });
+  const subjectIconMap = {
+    physics: "⚛",
+    atom: "⚛",
+    chemistry: "△",
+    biology: "♧",
+    sprout: "♧",
+    leaf: "♧",
+    flask: "△",
+    "combined maths": "▦",
+    "combined mathematics": "▦",
+    maths: "▦",
+    mathematics: "▦",
+    ict: "▱",
+    accounting: "⊙",
+    economics: "⌁",
+    commerce: "▥",
+  };
+  const subjectColorMap = {
+    physics: "teal",
+    chemistry: "teal",
+    biology: "green",
+    "combined maths": "orange",
+    "combined mathematics": "orange",
+    ict: "sky",
+    accounting: "green",
+    economics: "orange",
+  };
+  const getSubjectIcon = (subject) => {
+    const iconKey = normalizeName(subject.icon);
+    const nameKey = normalizeName(subject.name);
+    return subjectIconMap[iconKey] || subjectIconMap[nameKey] || subject.icon || "□";
+  };
+  const getSubjectCardColor = (subject) =>
+    subjectColorMap[normalizeName(subject.name)] || subject.color || "green";
+  const activeSubjectMap = new Map();
+  activeSubjectRecords
+    .forEach((subject) => {
+      const streamName = subject.stream?.name || selectedStream;
+      const hasActivity =
+        Number(subject.completedLessons || 0) > 0 ||
+        Number(subject.progressPercent || 0) > 0;
+
+      if (normalizeName(streamName) !== normalizeName(selectedStream) || !hasActivity) return;
+
+      const fallback = currentSubjects.find((item) => normalizeName(item.name) === normalizeName(subject.name)) || {};
+      const lessonCount = subject.lessonCount ?? fallback.lessonsCount ?? fallback.lessonCount ?? 0;
+      const completedLessons = subject.completedLessons ?? 0;
+      const progressPercent = subject.progressPercent ?? fallback.progress ?? 0;
+      const activeSubject = {
+        ...fallback,
+        ...subject,
+        id: subject._id || subject.id || fallback.id,
+        sinhala: subject.sinhalaName || subject.sinhala || fallback.sinhala,
+        icon: getSubjectIcon({ ...fallback, ...subject }),
+        color: getSubjectCardColor({ ...fallback, ...subject }),
+        lessonCount,
+        completedLessons,
+        progressPercent,
+      };
+      const subjectNameKey = normalizeName(activeSubject.name);
+      const existingSubject = activeSubjectMap.get(subjectNameKey);
+      if (!existingSubject || activeSubject.progressPercent > existingSubject.progressPercent) {
+        activeSubjectMap.set(subjectNameKey, activeSubject);
+      }
+    });
+  const activeSubjects = [...activeSubjectMap.values()];
   const currentSubjectNames = currentSubjects.map((subject) => subject.name).join(", ");
   const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
   const getYoutubeEmbedUrl = (url) => {
@@ -583,31 +693,76 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     }),
     { videos: 0, notes: 0, papers: 0 }
   );
-  const paperYears = [2024, 2023, 2022, 2021, 2020];
-  const paperTypeLabels = { mcq: "MCQ", structured: "Structured", essay: "Essay" };
+  const paperYears = [2025, 2024, 2023, 2022, 2021, 2020];
+  const paperTypeLabels = { mcq: "MCQ", structured: "Structure", essay: "Essay" };
   const currentPapers = [
     { title: "MCQ Paper - Part A", questions: 40, duration: 60, difficulty: "Medium" },
     { title: "MCQ Paper - Part B", questions: 40, duration: 60, difficulty: "Hard" },
   ];
-  const homeLessons = [...ongoingLessons, ...extraLessons]
-    .filter((lesson) => currentSubjectSet.has(lesson.subject))
-    .slice(0, 3);
-  const homeClasses = classPosts
-    .filter((post) => currentSubjectSet.has(post.subject))
-    .slice(0, 3)
-    .map((post) => ({
-      id: post._id,
-      title: post.title,
-      sinhala: post.title, // Could be enhanced with translation
-      subject: post.subject,
-      teacher: post.teacher?.name || "Teacher",
-      date: new Date(post.createdAt).toLocaleDateString(),
-      time: "TBD", // Could be added to model
-      tag: post.location.includes("Online") ? "Online" : "Physical",
-      color: "blue", // Could be based on subject
-      description: post.description
-    }));
+  const mapOngoingLessonCard = (lesson, index) => {
+    const subjectName = lesson.subject?.name || lesson.subject || "Biology";
+    return {
+      id: lesson._id || lesson.id || `${lesson.title}-${index}`,
+      title: lesson.title,
+      sinhala: lesson.sinhalaTitle || lesson.description || "",
+      subject: subjectName,
+      progress: lesson.progressPercent ?? 0,
+      chapter: lesson.chapter || (lesson.order ? `Chapter ${String(lesson.order).padStart(2, "0")}` : `Chapter ${String(index + 1).padStart(2, "0")}`),
+      color: "green",
+      icon: lessonIconMap[lesson.icon] || lesson.icon || "⌂",
+      rawLesson: lesson,
+    };
+  };
+  const homeLessons = studentOngoingLessons.map(mapOngoingLessonCard).slice(0, 3);
+  const homeClasses = [
+    {
+      id: "mock-physics-revision",
+      title: "Physics Revision Class",
+      sinhala: "භෞතික විද්‍යා සංශෝධන පන්තිය",
+      teacher: "Mr. Perera",
+      date: "Oct 28",
+      time: "4:00 PM",
+      tag: "Online",
+      color: "orange",
+      action: "Join Class",
+    },
+    {
+      id: "mock-chemistry-theory",
+      title: "Chemistry Theory Class",
+      sinhala: "රසායන විද්‍යා න්‍යාය පන්තිය",
+      teacher: "Ms. Silva",
+      date: "Nov 01",
+      time: "9:00 AM",
+      tag: "Physical",
+      color: "rose",
+      action: "View Details",
+    },
+    {
+      id: "mock-combined-maths-mcq",
+      title: "Combined Maths MCQ Class",
+      sinhala: "ඒකාබද්ධ ගණිත MCQ පන්තිය",
+      teacher: "Mr. Fernando",
+      date: "Nov 05",
+      time: "6:00 PM",
+      tag: "Online",
+      color: "teal",
+      action: "Join Class",
+    },
+  ];
 
+  const classColorCycle = ["orange", "rose", "teal", "blue", "green"];
+  const dashboardHomeClasses = classPosts.slice(0, 3).map((post, index) => ({
+    id: post._id || post.id,
+    title: post.title,
+    sinhala: post.description,
+    subject: post.subject,
+    teacher: post.teacher?.name || "Teacher",
+    date: post.createdAt ? new Date(post.createdAt).toLocaleDateString() : "Recently",
+    time: post.schedule || post.duration || "Schedule TBA",
+    tag: post.location?.toLowerCase().includes("online") ? "Online" : post.location || post.grade,
+    color: classColorCycle[index % classColorCycle.length],
+    rawPost: post,
+  }));
   const groupedClasses = classPosts.reduce((acc, post) => {
     if (!acc[post.subject]) acc[post.subject] = [];
     acc[post.subject].push({
@@ -617,10 +772,17 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       subject: post.subject,
       teacher: post.teacher?.name || "Teacher",
       date: new Date(post.createdAt).toLocaleDateString(),
-      time: "TBD",
-      tag: post.location.includes("Online") ? "Online" : "Physical",
+      time: post.schedule || "TBD",
+      tag: post.location?.includes("Online") ? "Online" : "Physical",
       color: "blue",
-      description: post.description
+      description: post.description,
+      grade: post.grade,
+      location: post.location,
+      schedule: post.schedule,
+      duration: post.duration,
+      fee: post.fee,
+      contactInfo: post.contactInfo,
+      rawPost: post,
     });
     return acc;
   }, {});
@@ -723,19 +885,35 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     }
 
     const token = localStorage.getItem("token");
-    if (!token) {
-      setLessonError("Please login again to load lessons.");
-      return;
-    }
-
     setLessonLoading(true);
-    const result = await getStudentLessons(token, subjectForLessons.id);
-    if (result.success) {
-      setStudentLessonRecords(result.lessons || []);
+    const studentResult = token
+      ? await getStudentLessons(token, subjectForLessons.id)
+      : { success: false };
+
+    if (studentResult.success) {
+      setStudentLessonRecords(studentResult.lessons || []);
     } else {
-      setLessonError(result.error || "Failed to load lessons.");
+      const publicResult = await getSubjectLessons(token || "", subjectForLessons.id);
+      if (publicResult.success) {
+        setStudentLessonRecords(publicResult.lessons || []);
+      } else {
+        setLessonError(publicResult.error || studentResult.error || "Failed to load lessons.");
+      }
     }
     setLessonLoading(false);
+  }
+
+  // eslint-disable-next-line no-unused-vars
+  async function openBiologySubject() {
+    const biologySubject = currentSubjects.find((subject) => normalizeName(subject.name) === "biology") || {
+      name: "Biology",
+      sinhala: "ජීව විද්‍යාව",
+      color: "green",
+      icon: "⌂",
+    };
+
+    await handleSelectSubject(biologySubject);
+    setActiveView("subjects");
   }
 
   async function handleStartMcqPractice() {
@@ -793,6 +971,49 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       setMcqError(result.error || "Failed to submit MCQ answers.");
     }
     setMcqLoading(false);
+  }
+
+  async function handleContinueHomeLesson(lesson) {
+    const lessonId = lesson?.rawLesson?._id || lesson?.id;
+    if (!lessonId) {
+      setSelectedLearningLesson(lesson);
+      setActiveView("subjects");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setSelectedLearningLesson(lesson);
+      setActiveView("subjects");
+      return;
+    }
+
+    const result = await getStudentLessonDetails(token, lessonId);
+    const rawLesson = result.success ? result.data?.lesson || lesson.rawLesson || lesson : lesson.rawLesson || lesson;
+    const lessonCard = {
+      ...lesson,
+      title: rawLesson.title || lesson.title,
+      sinhala: rawLesson.sinhalaTitle || rawLesson.description || lesson.sinhala,
+      rawLesson,
+      videoItems: getLessonVideoItems(rawLesson),
+      videos: getLessonVideoItems(rawLesson).length,
+      noteItems: getLessonNoteItems(rawLesson),
+      notes: getLessonNoteItems(rawLesson).length,
+      papers: rawLesson.pastPaperCount ?? lesson.papers ?? 0,
+      duration: rawLesson.durationMinutes || lesson.duration || 45,
+      views: rawLesson.viewCount ? Number(rawLesson.viewCount).toLocaleString() : lesson.views || "0",
+      updated: rawLesson.updatedLabel || (rawLesson.updatedAt ? new Date(rawLesson.updatedAt).toLocaleDateString() : "Recently"),
+      videoUrl: getLessonVideoItems(rawLesson)[0]?.url || "",
+    };
+
+    setSelectedSubject((prev) => prev || {
+      name: rawLesson.subject?.name || lesson.subject || "Biology",
+      sinhala: rawLesson.subject?.sinhalaName || "ජීව විද්‍යාව",
+      color: "green",
+    });
+    setSelectedLearningLesson(lessonCard);
+    setActiveView("subjects");
+    loadOngoingLessons();
   }
 
   async function handleSendAiMessage(nextMessage) {
@@ -872,7 +1093,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <div className="motivation-content">
           <div className="motivation-icon">🌟</div>
           <p>{motivationText}</p>
-        </div>
+        </div>}
       </div>
 
       <div className="home-top-grid">
@@ -897,7 +1118,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       </div>
 
       <section className="home-section">
-        <h3>අද ඉගෙනගන්න පාඩම්</h3>
+        <h3>Ongoing Lessons</h3>
           <div className="lesson-cards-grid">
             {ongoingLessons.map((lesson) => (
               <div key={lesson.id} className="lesson-card-item">
@@ -917,36 +1138,73 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       </section>
 
       <section className="home-section">
-        <h3>ඔබට ගැළපෙන පන්ති</h3>
-          <div className="class-cards-list">
-            {newClasses.map((cls) => (
-              <div key={cls.id} className="class-card-item">
-                <div>
-                  <h4>{cls.title}</h4>
-                  <p className="class-meta">{cls.teacher} • {cls.date} {cls.time}</p>
-                </div>
-                <button className="btn outline sm">Join</button>
-              </div>
-            ))}
+        <div className="section-topline">
+          <div>
+            <h3>New Class Details</h3>
+            <p className="section-subtitle">නව පන්ති විස්තර</p>
           </div>
+          <button
+            type="button"
+            className="view-all-btn"
+            onClick={() => {
+              setSelectedSubject(null);
+              setSelectedLearningLesson(null);
+              setActiveView("classes");
+            }}
+          >
+            View All
+          </button>
+        </div>}
+        <div className="class-cards-list">
+          {(dashboardHomeClasses.length > 0 ? dashboardHomeClasses : homeClasses).map((cls) => (
+            <div key={cls.id} className={`class-card-item ${cls.color}`}>
+              <div className="class-card-top">
+                <span className={`mini-icon ${cls.color}`}>▻</span>
+                <small>{cls.tag}</small>
+              </div>
+              <div>
+                <h4>{cls.title}</h4>
+                <p className="lesson-sinhala">{cls.sinhala}</p>
+                <p className="class-meta">Teacher: {cls.teacher}</p>
+                <p className="class-meta">Date: {cls.date} &middot; {cls.time}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="home-section">
-        <h3>විෂය තෝරන්න</h3>
+        <h3>Active Subjects</h3>
           <div className="subject-card-grid-home">
-            {currentSubjects.map((subject) => (
-              <div key={subject.name} className="subject-card-modern-home">
+            {activeSubjects.map((subject) => (
+              <button
+                type="button"
+                key={subject.name}
+                className="subject-card-modern-home"
+                onClick={() => {
+                  handleSelectSubject(subject);
+                  setActiveView("subjects");
+                }}
+              >
                 <div className="subject-emoji">{subject.icon}</div>
                 <h4>{subject.name}</h4>
-                <p>{subject.progress}% completed</p>
-                <div className="subject-progress-home">
-                  <div
-                    className="subject-progress-fill-home"
-                    style={{ width: `${subject.progress}%` }}
-                  ></div>
+                <p>{subject.sinhala}</p>
+                <div className="active-subject-progress-meta">
+                  <span>{subject.completedLessons}/{subject.lessonCount}</span>
+                  <strong>{subject.progressPercent}%</strong>
                 </div>
-              </div>
+                <div className="active-subject-progress">
+                  <span style={{ width: `${subject.progressPercent}%` }}></span>
+                </div>
+                <small>{subject.lessonCount} lessons</small>
+              </button>
             ))}
+            {activeSubjects.length === 0 && (
+              <EmptyState
+                title="No active subjects yet"
+                message="Subjects you start learning will appear here."
+              />
+            )}
           </div>
       </section>
     </div>
@@ -958,15 +1216,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <div className="motivation-content">
           <div className="motivation-icon">☀</div>
           <div>
-            <p className="hero-greeting">ආයුබෝවන්, Janani!</p>
+            <p className="hero-greeting">{dashboardGreeting}</p>
             <h2>{motivationText}</h2>
             <p className="sinhala-line">{motivationSinhala}</p>
           </div>
         </div>
         <div className="hero-count-box">
           <strong>{daysLeft}</strong>
-          <span>A/L සඳහා දින</span>
-          <small>A/L සඳහා දින</small>
+          <span>Days to A/L</span>
+          <small>A/L දක්වා දින</small>
         </div>
       </div>
 
@@ -975,8 +1233,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <div className="card-title-row">
             <span className="mini-icon blue">⏱</span>
             <div>
-              <h3>ඔබේ විභාග සූදානම</h3>
-              <p className="section-subtitle">A/L විභාග ගණනය</p>
+              <h3>A/L Exam Countdown</h3>
             </div>
           </div>
           <div className="countdown-number">
@@ -988,11 +1245,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <p><span>Stream</span><strong>{selectedStream}</strong></p>
             <p><span>Subjects</span><strong>{currentSubjectNames}</strong></p>
           </div>
-          <div className="mini-progress-row">
-            <span>ඔබේ ප්‍රගතිය</span>
-            <strong>58%</strong>
-          </div>
-          <div className="thin-progress"><span style={{ width: "58%" }}></span></div>
         </div>
 
         <div className="dashboard-card news-card compact-card">
@@ -1033,10 +1285,9 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <section className="home-section">
         <div className="section-topline">
           <div>
-            <h3>අද ඉගෙනගන්න පාඩම්</h3>
-            <p className="section-subtitle">පාඩම් බලන්න</p>
+            <h3>Ongoing Lessons</h3>
+            <p className="section-subtitle">දැනට කරගෙන යන පාඩම්</p>
           </div>
-          <button type="button" className="view-all-btn">View All</button>
         </div>
         <div className="lesson-cards-grid">
           {homeLessons.map((lesson) => (
@@ -1055,7 +1306,13 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
               <div className="lesson-progress-bar">
                 <div className="lesson-progress-fill" style={{ width: `${lesson.progress}%` }}></div>
               </div>
-              <button className="btn solid sm">පාඩම් බලන්න</button>
+              <button
+                type="button"
+                className="btn solid sm"
+                onClick={() => handleContinueHomeLesson(lesson)}
+              >
+                Continue / ඉදිරියට
+              </button>
             </div>
           ))}
         </div>
@@ -1064,13 +1321,23 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <section className="home-section">
         <div className="section-topline">
           <div>
-            <h3>ඔබට ගැළපෙන පන්ති</h3>
+            <h3>New Class Details</h3>
             <p className="section-subtitle">නව පන්ති විස්තර</p>
           </div>
-          <button type="button" className="view-all-btn">View All</button>
+          <button
+            type="button"
+            className="view-all-btn"
+            onClick={() => {
+              setSelectedSubject(null);
+              setSelectedLearningLesson(null);
+              setActiveView("classes");
+            }}
+          >
+            View All
+          </button>
         </div>
         <div className="class-cards-list">
-          {homeClasses.map((cls) => (
+          {(dashboardHomeClasses.length > 0 ? dashboardHomeClasses : homeClasses).map((cls) => (
             <div key={cls.id} className={`class-card-item ${cls.color}`}>
               <div className="class-card-top">
                 <span className={`mini-icon ${cls.color}`}>▻</span>
@@ -1079,10 +1346,9 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
               <div>
                 <h4>{cls.title}</h4>
                 <p className="lesson-sinhala">{cls.sinhala}</p>
-                <p className="class-meta">♙ {cls.teacher}</p>
-                <p className="class-meta">□ {cls.date} · ◷ {cls.time}</p>
+                <p className="class-meta">Teacher: {cls.teacher}</p>
+                <p className="class-meta">Date: {cls.date} &middot; {cls.time}</p>
               </div>
-              <button className="btn solid sm">Join Class</button>
             </div>
           ))}
         </div>
@@ -1091,51 +1357,82 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <section className="home-section">
         <div className="section-topline">
           <div>
-            <h3>විෂය තෝරන්න</h3>
+            <h3>Active Subjects</h3>
             <p className="section-subtitle">සක්‍රීය විෂයන්</p>
           </div>
-          <button type="button" className="view-all-btn">View All</button>
+          <button
+            type="button"
+            className="view-all-btn"
+            onClick={() => {
+              setSelectedSubject(null);
+              setSelectedLearningLesson(null);
+              setActiveView("subjects");
+            }}
+          >
+            View All
+          </button>
         </div>
         <div className="subject-card-grid-home">
-          {currentSubjects.map((subject) => (
-            <div key={subject.name} className={`subject-card-modern-home ${subject.color}`}>
+          {activeSubjects.map((subject) => (
+            <button
+              type="button"
+              key={subject.name}
+              className={`subject-card-modern-home ${subject.color}`}
+              onClick={() => {
+                handleSelectSubject(subject);
+                setActiveView("subjects");
+              }}
+            >
               <div className="subject-emoji">{subject.icon}</div>
               <h4>{subject.name}</h4>
               <p>{subject.sinhala}</p>
-              <div className="mini-progress-row">
-                <small>{subject.papers} Papers</small>
-                <strong>{subject.progress || 0}%</strong>
+              <div className="active-subject-progress-meta">
+                <span>{subject.completedLessons}/{subject.lessonCount}</span>
+                <strong>{subject.progressPercent}%</strong>
               </div>
-              <div className="subject-progress-home">
-                <div className="subject-progress-fill-home" style={{ width: `${subject.progress || 0}%` }}></div>
+              <div className="active-subject-progress">
+                <span style={{ width: `${subject.progressPercent}%` }}></span>
               </div>
-              <small className="lesson-count">{subject.students} Students</small>
-            </div>
+              <small className="lesson-count">{subject.lessonCount} lessons</small>
+            </button>
           ))}
+          {activeSubjects.length === 0 && (
+            <EmptyState
+              title="No active subjects yet"
+              message="Subjects you start learning will appear here."
+            />
+          )}
         </div>
       </section>
 
+      {false && (
       <div className="summary-grid">
         <div className="summary-card"><span>▯</span><strong>82</strong><p>පාඩම් බලන්න</p><small>සම්පූර්ණ කළ පාඩම්</small></div>
         <div className="summary-card"><span>▤</span><strong>34</strong><p>පසුගිය ප්‍රශ්න පත්‍ර</p><small>ප්‍රශ්න පත්‍ර පුහුණුව</small></div>
         <div className="summary-card"><span>◷</span><strong>126</strong><p>Study Hours</p><small>අධ්‍යයන පැය</small></div>
         <div className="summary-card"><span>◎</span><strong>74%</strong><p>Average Score</p><small>සාමාන්‍ය ලකුණු</small></div>
       </div>
+      )}
     </div>
   );
 
   const renderLearningLesson = () => (
     <div className="dashboard-view-content lesson-resource-view">
+      <button type="button" className="lesson-back-btn" onClick={() => setSelectedLearningLesson(null)}>
+        Back to Lessons
+      </button>
       <div className="lesson-resource-hero">
-        <div className="subject-stream-icon green">{selectedLearningLesson.icon}</div>
+        <div className={`subject-stream-icon ${getSubjectCardColor(selectedSubject || {})}`}>
+          <span className="subject-display-icon">{getSubjectIcon(selectedSubject || {})}</span>
+        </div>
         <div>
-          <h2>{selectedLearningLesson.title}</h2>
-          <p>{selectedLearningLesson.sinhala}</p>
+          <h2>{selectedLearningLesson.sinhala || selectedLearningLesson.title}</h2>
+          <p>{selectedLearningLesson.title}</p>
           <small>Biology • Biology Stream</small>
         </div>
-        <button type="button" className="btn outline" onClick={() => setSelectedLearningLesson(null)}>
+        {false && <button type="button" className="btn outline" onClick={() => setSelectedLearningLesson(null)}>
           Back to Lessons
-        </button>
+        </button>}
       </div>
 
       <section className="resource-panel video-resource-panel">
@@ -1164,12 +1461,12 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             </article>
           ))}
         </div>
-        <div className="video-meta-row">
+        {false && <div className="video-meta-row">
           <span>Videos: {(selectedLearningLesson.videoItems || []).length}</span>
           <span>◷ Duration: {selectedLearningLesson.duration} min</span>
           <span>◎ {selectedLearningLesson.views} views</span>
           <span>□ Updated: {selectedLearningLesson.updated}</span>
-        </div>
+        </div>}
       </section>
 
       <section className="resource-panel">
@@ -1350,9 +1647,22 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   );
 
   const renderSubjectOverview = () => selectedLearningLesson ? renderLearningLesson() : (
-    <div className="dashboard-view-content">
+    <div className="dashboard-view-content subject-overview-view">
+      <button
+        type="button"
+        className="subject-back-btn"
+        onClick={() => {
+          setSelectedSubject(null);
+          setSelectedLearningLesson(null);
+          setStudentLessonRecords([]);
+          setLessonError("");
+        }}
+      >
+        Back
+      </button>
       <div className="subject-detail-hero">
-        <div className={`subject-stream-icon ${selectedSubject?.color || "green"}`}>
+        <div className={`subject-stream-icon ${getSubjectCardColor(selectedSubject || {})}`}>
+          <span className="subject-display-icon">{getSubjectIcon(selectedSubject || {})}</span>
           {selectedSubject?.icon || "♧"}
         </div>
         <div>
@@ -1363,7 +1673,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <p>{selectedSubject?.sinhala}</p>
           <small>□ {currentStream.title} • {currentStream.sinhala}</small>
         </div>
-        <div className="subject-detail-actions">
+        {false && <div className="subject-detail-actions">
           <button
             type="button"
             className="btn outline"
@@ -1377,7 +1687,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             Back
           </button>
           <button type="button" className="btn solid" onClick={() => setActiveView("home")}>Dashboard</button>
-        </div>
+        </div>}
       </div>
 
       <div className="subject-stat-grid">
@@ -1398,7 +1708,9 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           {!lessonLoading && !lessonError && selectedLessonCards.map((lesson) => (
             <article className="biology-lesson-card" key={lesson.id || lesson.title}>
               <div className="lesson-card-topline">
-                <span className="bio-lesson-icon">{lesson.icon}</span>
+                <span className="bio-lesson-icon">
+                  <span className="subject-display-icon">{getSubjectIcon(selectedSubject || {})}</span>
+                </span>
                 <strong>{lesson.progress}% Complete</strong>
               </div>
               <h4>{lesson.title}</h4>
@@ -1433,15 +1745,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         {currentSubjects.map((subject) => (
           <article key={subject.name} className="stream-subject-card">
             <div className="subject-card-topline">
-              <span className={`subject-square-icon ${subject.color}`}>{subject.icon}</span>
+              <span className={`subject-square-icon ${getSubjectCardColor(subject)}`}>{getSubjectIcon(subject)}</span>
               <strong>Available</strong>
             </div>
             <h4>{subject.name}</h4>
             <p>{subject.sinhala}</p>
-            <div className="subject-meta-row">
+            {false && <div className="subject-meta-row">
               <span>▤ {subject.papers} Papers</span>
               <span>♙ {subject.students} Students</span>
-            </div>
+            </div>}
             <button type="button" className="btn solid subject-btn" onClick={() => handleSelectSubject(subject)}>
               View Lessons
             </button>
@@ -1481,11 +1793,11 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       const matchesSubject = !searchFilters.subject ||
         cls.subject.toLowerCase().includes(searchFilters.subject.toLowerCase()) ||
         cls.title.toLowerCase().includes(searchFilters.subject.toLowerCase()) ||
-        (cls.teacher?.name || '').toLowerCase().includes(searchFilters.subject.toLowerCase());
+        String(cls.teacher?.name || cls.teacher || '').toLowerCase().includes(searchFilters.subject.toLowerCase());
 
       const matchesGrade = !searchFilters.grade || cls.grade === searchFilters.grade;
       const matchesLocation = !searchFilters.location ||
-        cls.location.toLowerCase().includes(searchFilters.location.toLowerCase());
+        String(cls.location || '').toLowerCase().includes(searchFilters.location.toLowerCase());
 
       return matchesSubject && matchesGrade && matchesLocation;
     });
@@ -1701,7 +2013,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             ) : (
               getFilteredClasses(expandedSubject).map((cls) => (
                 <div
-                  key={cls._id}
+                  key={cls._id || cls.id}
                   className="class-post-card premium-post"
                   onClick={() => setSelectedClassPost(cls)}
                 >
@@ -1986,6 +2298,53 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     </div>
   );
 
+  const renderChatScreen = () => (
+    <div className="dashboard-view-content ai-chat-screen">
+      <div className="ai-chat-screen-header">
+        <div>
+          <h2>AI Study Chat</h2>
+          <p>Ask your A/L study questions in one focused screen.</p>
+        </div>}
+        <button type="button" className="btn outline" onClick={() => setActiveView("home")}>
+          Back to Dashboard
+        </button>
+      </div>
+
+      <div className="ai-chat-screen-body">
+        {aiMessages.map((chatMessage, index) => (
+          <p
+            key={`${chatMessage.role}-${index}`}
+            className={chatMessage.role === "user" ? "ai-user-message" : "ai-assistant-message"}
+          >
+            {renderChatText(chatMessage.text)}
+          </p>
+        ))}
+        {aiLoading && <p className="ai-assistant-message">Preparing answer...</p>}
+        {aiError && <p className="ai-error-message">{aiError}</p>}
+        {aiMessages.length === 0 && (
+          <p className="ai-assistant-message">Ayubowan! Ask about your A/L subjects, lessons, or weak areas.</p>
+        )}
+      </div>
+
+      <div className="ai-chat-screen-input">
+        <input
+          value={aiInput}
+          placeholder="Ask anything..."
+          onChange={(event) => setAiInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              handleSendAiMessage();
+            }
+          }}
+        />
+        <button type="button" disabled={aiLoading} onClick={() => handleSendAiMessage()}>
+          Send
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`dashboard-shell ${settings.darkMode ? "dark" : ""} ${styles.dashboardRoot}`}>
       <header className="dashboard-header">
@@ -2002,7 +2361,17 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
           <nav className={`header-nav ${showMobileMenu ? "active" : ""}`}>
             <button className={activeView === "home" ? "active" : ""} onClick={() => {setActiveView("home"); setShowMobileMenu(false)}}>Home</button>
-            <button className={activeView === "subjects" ? "active" : ""} onClick={() => {setActiveView("subjects"); setShowMobileMenu(false)}}>Subjects</button>
+            <button
+              className={activeView === "subjects" ? "active" : ""}
+              onClick={() => {
+                setSelectedSubject(null);
+                setSelectedLearningLesson(null);
+                setActiveView("subjects");
+                setShowMobileMenu(false);
+              }}
+            >
+              Subjects
+            </button>
             <button className={activeView === "classes" ? "active" : ""} onClick={() => {setActiveView("classes"); setShowMobileMenu(false)}}>Classes</button>
             <button className={activeView === "pastpapers" ? "active" : ""} onClick={() => {setActiveView("pastpapers"); setShowMobileMenu(false)}}>Past Papers</button>
           </nav>
@@ -2127,6 +2496,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             {activeView === "classes" && renderStreamClasses()}
             {activeView === "pastpapers" && renderPastPapers()}
             {activeView === "settings" && renderSettings()}
+            {activeView === "chat" && renderChatScreen()}
         </div>
       </main>
 
@@ -2192,14 +2562,18 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <div className="ai-chat-actions">
               <button
                 type="button"
-                aria-label={isAiMaximized ? "Minimize chatbot" : "Maximize chatbot"}
-                title={isAiMaximized ? "Minimize" : "Maximize"}
-                onClick={() => setIsAiMaximized((prev) => !prev)}
+                aria-label="Open chatbot screen"
+                title="Open chat screen"
+                onClick={() => {
+                  setIsAiMaximized(false);
+                  setShowAiPanel(false);
+                  setActiveView("chat");
+                }}
               >
                 {isAiMaximized ? "−" : "□"}
               </button>
               <button type="button" aria-label="Close chatbot" onClick={() => setShowAiPanel(false)}>×</button>
-            </div>
+            </div>}
           </div>
           <div className="ai-chat-body">
             {aiMessages.map((chatMessage, index) => (
@@ -2725,44 +3099,115 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
         .subject-card-grid-home {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 18px;
+          grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+          gap: 20px;
         }
 
         .subject-card-modern-home {
-          background: rgba(255, 255, 255, 0.9);
-          padding: 22px;
-          border-radius: 24px;
-          border: 1px solid #e0ecfb;
-          text-align: left;
-          box-shadow: 0 18px 34px rgba(16, 38, 76, 0.06);
-          transition: transform 0.22s ease, box-shadow 0.22s ease;
+          min-height: 236px;
+          background: #ffffff;
+          padding: 20px;
+          border-radius: 28px;
+          border: 1px solid #e7eaee;
+          width: 100%;
+          color: inherit;
+          font: inherit;
+          text-align: center;
+          cursor: pointer;
+          box-shadow: none;
+          transition: border-color 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+        }
+
+        .subject-card-modern-home:hover {
+          border-color: rgba(16, 185, 129, 0.32);
+          box-shadow: 0 18px 34px rgba(15, 23, 42, 0.06);
+          transform: translateY(-2px);
         }
 
         .subject-emoji {
-          width: 54px;
-          height: 54px;
+          width: 60px;
+          height: 60px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 26px;
-          margin-bottom: 14px;
-          border-radius: 16px;
-          background: linear-gradient(135deg, #edf4ff, #f3fbff);
+          font-size: 28px;
+          margin: 0 auto 16px;
+          border-radius: 18px;
+          color: #10b981;
+          background: #e8fbf2;
         }
 
         .subject-card-modern-home h4,
         .subject-card-modern.large h4 {
           margin: 0 0 8px;
-          color: #13233f;
-          font-size: 18px;
+          color: #0f172a;
+          font-size: 16px;
         }
 
         .subject-card-modern-home p,
         .subject-card-modern.large p {
           margin: 0;
-          color: #60738f;
-          font-size: 14px;
+          color: #8b949e;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .active-subject-progress-meta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 18px;
+          color: #9ca3af;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .active-subject-progress-meta strong {
+          color: #111827;
+        }
+
+        .active-subject-progress {
+          height: 7px;
+          margin-top: 8px;
+          border-radius: 999px;
+          overflow: hidden;
+          background: #f0f1f2;
+        }
+
+        .active-subject-progress span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: #2dd4bf;
+        }
+
+        .subject-card-modern-home.green .subject-emoji,
+        .subject-card-modern-home.biology .subject-emoji {
+          color: #65c90f;
+          background: #effdde;
+        }
+
+        .subject-card-modern-home.orange .subject-emoji {
+          color: #f59e0b;
+          background: #fff7df;
+        }
+
+        .subject-card-modern-home.sky .subject-emoji {
+          color: #06b6d4;
+          background: #e6fbfb;
+        }
+
+        .subject-card-modern-home.orange .active-subject-progress span {
+          background: #fbbf24;
+        }
+
+        .subject-card-modern-home.green .active-subject-progress span {
+          background: #84e51d;
+        }
+
+        .subject-card-modern-home.sky .active-subject-progress span {
+          background: #22c9d6;
         }
 
         .subject-progress-home {
@@ -3385,10 +3830,10 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .student-footer {
           margin-top: 28px;
           padding: 46px 4% 28px;
-          color: #cbd5e1;
+          color: #d7e3ee;
           background:
-            linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(124, 58, 237, 0.16)),
-            #0f172a;
+            linear-gradient(135deg, rgba(14, 165, 164, 0.16), rgba(37, 99, 235, 0.12)),
+            #061826;
         }
 
         .student-footer .footer-grid {
@@ -3444,50 +3889,132 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           text-align: center;
         }
 
+        .ai-chat-screen {
+          min-height: 620px;
+          display: grid;
+          grid-template-rows: auto 1fr auto;
+          gap: 18px;
+        }
+
+        .ai-chat-screen-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 24px;
+          border-radius: 18px;
+          background: #ffffff;
+          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        }
+
+        .ai-chat-screen-header h2 {
+          margin: 0 0 6px;
+          color: #0f172a;
+        }
+
+        .ai-chat-screen-header p {
+          margin: 0;
+          color: #64748b;
+        }
+
+        .ai-chat-screen-body {
+          min-height: 460px;
+          overflow-y: auto;
+          padding: 24px;
+          border-radius: 18px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+        }
+
+        .ai-chat-screen-input {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 12px;
+          padding: 16px;
+          border-radius: 18px;
+          background: #ffffff;
+          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        }
+
+        .ai-chat-screen-input input {
+          min-height: 48px;
+          border: 1px solid #dbe4ef;
+          border-radius: 12px;
+          padding: 0 16px;
+          font: inherit;
+        }
+
+        .ai-chat-screen-input button {
+          border: 0;
+          border-radius: 12px;
+          padding: 0 24px;
+          color: #ffffff;
+          background: #0f766e;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
         .stream-subject-head,
         .subject-detail-hero {
           display: flex;
           align-items: center;
-          gap: 20px;
-          margin: 8px 0 42px;
+          gap: 16px;
+          margin: 2px 0 30px;
         }
 
         .stream-head-icon,
         .subject-stream-icon {
-          width: 80px;
-          height: 80px;
-          border-radius: 18px;
+          width: 64px;
+          height: 64px;
+          border-radius: 16px;
           color: #ffffff;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 36px;
+          font-size: 30px;
           font-weight: 800;
           flex-shrink: 0;
         }
 
         .stream-head-icon.green,
-        .subject-stream-icon.green,
-        .subject-square-icon.green { background: #1db954; }
+        .subject-stream-icon.green { background: #1db954; }
         .stream-head-icon.blue,
-        .subject-stream-icon.blue,
-        .subject-square-icon.blue { background: #2f6df6; }
+        .subject-stream-icon.blue { background: #2f6df6; }
         .stream-head-icon.orange,
-        .subject-stream-icon.orange,
-        .subject-square-icon.orange { background: #f97316; }
+        .subject-stream-icon.orange { background: #f97316; }
         .stream-head-icon.purple,
-        .subject-stream-icon.purple,
-        .subject-square-icon.purple { background: #a142f4; }
+        .subject-stream-icon.purple { background: #a142f4; }
         .stream-head-icon.teal,
-        .subject-stream-icon.teal,
-        .subject-square-icon.teal { background: #0f9b8a; }
+        .subject-stream-icon.teal { background: #0f9b8a; }
+
+        .subject-square-icon.green {
+          color: #65c90f;
+          background: #effdde;
+        }
+
+        .subject-square-icon.orange {
+          color: #f59e0b;
+          background: #fff7df;
+        }
+
+        .subject-square-icon.sky,
+        .subject-square-icon.teal {
+          color: #06b6d4;
+          background: #e6fbfb;
+        }
+
+        .subject-square-icon.blue,
+        .subject-square-icon.purple {
+          color: #10b981;
+          background: #e8fbf2;
+        }
 
         .stream-subject-head h2,
         .subject-title-row h2 {
           margin: 0;
           color: #00163d;
-          font-size: 40px;
-          letter-spacing: -0.03em;
+          font-size: 32px;
+          letter-spacing: 0;
         }
 
         .stream-subject-head p,
@@ -3495,14 +4022,14 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .subject-detail-hero small {
           margin: 4px 0 0;
           color: #334155;
-          font-size: 21px;
+          font-size: 17px;
           font-weight: 600;
         }
 
         .stream-subject-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(260px, 1fr));
-          gap: 32px;
+          grid-template-columns: repeat(3, minmax(240px, 1fr));
+          gap: 24px;
         }
 
         .stream-subject-card,
@@ -3515,8 +4042,8 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .stream-subject-card {
-          min-height: 330px;
-          padding: 30px;
+          min-height: 260px;
+          padding: 24px;
           display: flex;
           flex-direction: column;
         }
@@ -3527,15 +4054,16 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           align-items: flex-start;
           justify-content: space-between;
           gap: 16px;
-          margin-bottom: 26px;
+          margin-bottom: 20px;
         }
 
         .subject-square-icon,
         .bio-lesson-icon {
-          width: 60px;
-          height: 60px;
-          border-radius: 14px;
-          color: #ffffff;
+          width: 58px;
+          height: 58px;
+          border-radius: 18px;
+          color: #10b981;
+          background: #e8fbf2;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -3582,9 +4110,9 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .biology-lesson-card .btn {
           margin-top: auto;
           width: 100%;
-          min-height: 60px;
-          border-radius: 13px;
-          font-size: 20px;
+          min-height: 50px;
+          border-radius: 12px;
+          font-size: 17px;
         }
 
         .subject-detail-hero {
@@ -3685,6 +4213,183 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           background: #1db954;
         }
 
+        .subject-overview-view {
+          gap: 0;
+        }
+
+        .subject-back-btn {
+          align-self: flex-start;
+          min-height: 36px;
+          padding: 0 14px;
+          margin: 0 0 18px;
+          border: 1px solid #dbe4ef;
+          border-radius: 10px;
+          color: #334155;
+          background: #ffffff;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+        }
+
+        .subject-overview-view .subject-detail-hero {
+          align-items: center;
+          margin: 0 0 24px;
+          padding: 18px 0 8px;
+        }
+
+        .subject-overview-view .subject-stream-icon {
+          width: 58px;
+          height: 58px;
+          border-radius: 18px;
+          color: #10b981;
+          background: #e8fbf2;
+          font-size: 0;
+        }
+
+        .subject-stream-icon.green {
+          color: #65c90f;
+          background: #effdde;
+        }
+
+        .subject-stream-icon.orange {
+          color: #f59e0b;
+          background: #fff7df;
+        }
+
+        .subject-stream-icon.sky,
+        .subject-stream-icon.teal {
+          color: #06b6d4;
+          background: #e6fbfb;
+        }
+
+        .subject-display-icon {
+          font-size: 27px;
+          line-height: 1;
+        }
+
+        .subject-overview-view .subject-title-row h2 {
+          font-size: 30px;
+        }
+
+        .subject-overview-view .subject-title-row span,
+        .subject-overview-view .lesson-card-topline strong {
+          padding: 6px 12px;
+          font-size: 12px;
+        }
+
+        .subject-overview-view .subject-stat-grid {
+          grid-template-columns: repeat(3, minmax(150px, 1fr));
+          gap: 16px;
+          margin-bottom: 28px;
+        }
+
+        .subject-overview-view .subject-stat-card:nth-child(4) {
+          display: none;
+        }
+
+        .subject-overview-view .subject-stat-card {
+          min-height: 92px;
+          padding: 18px 20px;
+          border-radius: 16px;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+        }
+
+        .subject-overview-view .subject-stat-card span {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          font-size: 20px;
+          background: #ecfdf5;
+          color: #10b981;
+        }
+
+        .subject-overview-view .subject-stat-card strong {
+          font-size: 24px;
+        }
+
+        .subject-overview-view .subject-stat-card p {
+          font-size: 14px;
+        }
+
+        .subject-overview-view .biology-lessons-section h3 {
+          margin-bottom: 18px;
+          font-size: 24px;
+        }
+
+        .subject-overview-view .biology-lesson-grid {
+          grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+          gap: 20px;
+        }
+
+        .subject-overview-view .biology-lesson-card {
+          min-height: 300px;
+          padding: 22px;
+          border: 1px solid rgba(187, 247, 208, 0.85);
+          border-radius: 20px;
+          background:
+            linear-gradient(135deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.98) 48%, rgba(240, 253, 244, 0.95)),
+            #ffffff;
+          box-shadow: 0 16px 34px rgba(6, 95, 70, 0.08);
+        }
+
+        .subject-overview-view .biology-lesson-card:nth-child(3n + 2) {
+          border-color: rgba(153, 246, 228, 0.9);
+          background:
+            linear-gradient(135deg, rgba(240, 253, 250, 0.96), rgba(255, 255, 255, 0.98) 48%, rgba(236, 254, 255, 0.95)),
+            #ffffff;
+        }
+
+        .subject-overview-view .biology-lesson-card:nth-child(3n) {
+          border-color: rgba(254, 240, 138, 0.85);
+          background:
+            linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.98) 48%, rgba(240, 253, 244, 0.92)),
+            #ffffff;
+        }
+
+        .subject-overview-view .lesson-card-topline {
+          margin-bottom: 18px;
+        }
+
+        .subject-overview-view .bio-lesson-icon {
+          width: 50px;
+          height: 50px;
+          border-radius: 16px;
+          color: #10b981;
+          background: rgba(209, 250, 229, 0.9);
+        }
+
+        .subject-overview-view .biology-lesson-card h4 {
+          font-size: 19px;
+        }
+
+        .subject-overview-view .biology-lesson-card p {
+          font-size: 14px;
+        }
+
+        .subject-overview-view .biology-progress {
+          height: 7px;
+          margin: 20px 0 14px;
+          background: rgba(15, 23, 42, 0.08);
+        }
+
+        .subject-overview-view .biology-progress span {
+          background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .subject-overview-view .biology-counts {
+          margin: 18px 0 18px;
+          font-size: 13px;
+          color: #64748b;
+        }
+
+        .subject-overview-view .biology-lesson-card .btn {
+          min-height: 44px;
+          border-radius: 12px;
+          font-size: 15px;
+          background: linear-gradient(135deg, #10b981, #34d399);
+        }
+
         .lesson-resource-hero {
           display: flex;
           align-items: center;
@@ -3730,6 +4435,161 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           margin: 0;
           color: #00163d;
           font-size: 30px;
+        }
+
+        .lesson-resource-view {
+          gap: 0;
+        }
+
+        .lesson-back-btn {
+          align-self: flex-start;
+          min-height: 38px;
+          padding: 0 16px;
+          margin: 0 0 18px;
+          border: 1px solid rgba(37, 99, 235, 0.28);
+          border-radius: 999px;
+          color: #2563eb;
+          background: rgba(255, 255, 255, 0.72);
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 12px 28px rgba(37, 99, 235, 0.10);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+        }
+
+        .lesson-resource-view .lesson-resource-hero {
+          margin-bottom: 38px;
+          padding: 8px 0 18px;
+          align-items: center;
+        }
+
+        .lesson-resource-view .subject-stream-icon {
+          width: 62px;
+          height: 62px;
+          border-radius: 18px;
+          color: #65c90f;
+          background: rgba(239, 253, 222, 0.9);
+          box-shadow: 0 16px 34px rgba(101, 201, 15, 0.12);
+        }
+
+        .lesson-resource-view .lesson-resource-hero h2 {
+          font-size: 34px;
+          line-height: 1.18;
+          max-width: 980px;
+        }
+
+        .lesson-resource-view .lesson-resource-hero p {
+          margin-top: 8px;
+          font-size: 18px;
+          color: #475569;
+        }
+
+        .lesson-resource-view .lesson-resource-hero small {
+          margin-top: 10px;
+          font-size: 15px;
+          color: #64748b;
+        }
+
+        .lesson-resource-view .resource-panel {
+          padding: 24px;
+          margin-bottom: 28px;
+          border: 1px solid rgba(226, 232, 240, 0.72);
+          border-radius: 22px;
+          background: rgba(255, 255, 255, 0.76);
+          box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+        }
+
+        .lesson-resource-view .resource-title-row {
+          margin-bottom: 18px;
+        }
+
+        .lesson-resource-view .resource-title-row h3 {
+          font-size: 24px;
+          letter-spacing: 0;
+        }
+
+        .lesson-resource-view .resource-icon {
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
+          font-size: 20px;
+        }
+
+        .lesson-resource-view .resource-panel:nth-of-type(2) .resource-title-row h3 {
+          font-size: 0;
+        }
+
+        .lesson-resource-view .resource-panel:nth-of-type(2) .resource-title-row h3::after {
+          content: "Notes • සටහන්";
+          font-size: 24px;
+        }
+
+        .lesson-resource-view .video-resource-grid {
+          gap: 20px;
+        }
+
+        .lesson-resource-view .video-card {
+          padding: 12px;
+          border: 1px solid rgba(203, 213, 225, 0.72);
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.76);
+          box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+          overflow: hidden;
+        }
+
+        .lesson-resource-view .video-frame {
+          border-radius: 14px;
+          overflow: hidden;
+          background: #0f172a;
+        }
+
+        .lesson-resource-view .video-card h4 {
+          margin: 14px 4px 4px;
+          font-size: 16px;
+        }
+
+        .lesson-resource-view .video-card p,
+        .lesson-resource-view .video-meta-row,
+        .lesson-resource-view .simple-mcq-start-card {
+          display: none;
+        }
+
+        .lesson-resource-view .note-resource-card,
+        .lesson-resource-view .paper-resource-card {
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.78);
+          box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+        }
+
+        .lesson-resource-view .paper-selector {
+          margin: 0 0 26px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+        }
+
+        .lesson-resource-view .paper-year-row button {
+          min-width: 92px;
+          border-radius: 12px;
+        }
+
+        .lesson-resource-view .paper-type-tabs {
+          width: fit-content;
+          padding: 4px;
+          border-radius: 14px;
+          background: rgba(248, 250, 252, 0.9);
+        }
+
+        .lesson-resource-view .paper-type-tabs button {
+          min-width: 118px;
+          border-radius: 11px;
+        }
+
+        .lesson-resource-view .paper-resource-grid {
+          gap: 20px;
         }
 
         .resource-icon {
@@ -3979,11 +4839,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           padding: 0 22px;
         }
 
-        .lesson-resource-view .paper-selector,
-        .lesson-resource-view .paper-resource-grid {
-          display: none;
-        }
-
         .simple-mcq-start-card {
           display: flex;
           align-items: center;
@@ -4039,7 +4894,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .mcq-practice-head h3 {
           margin: 0;
           color: #4c1d95;
-          font-size: 28px;
+          font-size: 22px;
         }
 
         .mcq-practice-head p {
@@ -4244,6 +5099,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           grid-template-columns: minmax(360px, 0.86fr) minmax(600px, 1.8fr);
           gap: 24px;
           margin: 0;
+          align-items: stretch;
         }
 
         .dashboard-card,
@@ -4259,6 +5115,17 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
         .compact-card {
           padding: 22px 20px;
+        }
+
+        .countdown-card.compact-card {
+          align-self: stretch;
+        }
+
+        .news-card.compact-card {
+          align-self: stretch;
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
         }
 
         .card-title-row,
@@ -4402,7 +5269,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .compact-news-list {
           display: grid;
           gap: 14px;
-          max-height: 450px;
+          max-height: 236px;
           overflow-y: auto;
           padding-right: 6px;
           overscroll-behavior: contain;
@@ -4605,7 +5472,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .summary-grid {
-          display: grid;
+          display: none;
           grid-template-columns: repeat(4, minmax(190px, 1fr));
           gap: 20px;
         }
@@ -4889,7 +5756,76 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           border: 1px solid #dbe6f4;
           border-radius: 12px;
           padding: 0 15px;
-          font-size: 15px;
+          font-size: 14px;
+        }
+
+        .class-action-row {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 10px;
+          margin-top: 18px;
+        }
+
+        .class-action-row .btn {
+          margin-top: 0;
+        }
+
+        .class-save-btn {
+          width: 46px;
+          min-height: 44px;
+          border: 0;
+          border-radius: 12px;
+          background: #f8fafc;
+          color: #64748b;
+          font-size: 16px;
+          font-weight: 900;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+        }
+
+        .class-save-btn:hover {
+          color: #10b981;
+          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+          transform: translateY(-1px);
+        }
+
+        .class-card-item.orange {
+          border-color: #fde68a;
+        }
+
+        .class-card-item.rose {
+          border-color: #fecaca;
+        }
+
+        .class-card-item.teal {
+          border-color: #99f6e4;
+        }
+
+        .class-card-item.orange .mini-icon {
+          color: #b45309;
+          background: #fffbeb;
+        }
+
+        .class-card-item.rose .mini-icon {
+          color: #9f1239;
+          background: #ffe4e6;
+        }
+
+        .class-card-item.teal .mini-icon {
+          color: #0f766e;
+          background: #ccfbf1;
+        }
+
+        .class-card-item.orange .class-card-top small,
+        .class-card-item.teal .class-card-top small {
+          background: #d1fae5;
+          color: #047857;
+        }
+
+        .class-card-item.rose .class-card-top small {
+          background: #f5f5f5;
+          color: #525252;
         }
 
         .ai-chat-input button {
@@ -5056,15 +5992,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .dashboard-shell {
-          background: #ffffff;
-          color: #1e1b4b;
+          background: #fdfcf9;
+          color: #1f2933;
         }
 
         .dashboard-header {
           min-height: 74px;
-          background: rgba(255, 255, 255, 0.78);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.7);
-          box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+          background: rgba(255, 255, 255, 0.86);
+          border-bottom: 1px solid rgba(229, 231, 235, 0.9);
+          box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
           backdrop-filter: blur(18px);
           -webkit-backdrop-filter: blur(18px);
         }
@@ -5076,19 +6012,19 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .brand {
-          color: #7C3AED;
+          color: #111827;
           font-weight: 800;
         }
 
         .brand-mark {
           width: 38px;
           height: 38px;
-          background: linear-gradient(145deg, #ffffff, #dbeafe);
-          box-shadow: 0 12px 24px rgba(37, 99, 235, 0.14);
+          background: transparent;
+          box-shadow: none;
         }
 
         .brand-logo-shell {
-          padding: 3px;
+          padding: 0;
         }
 
         .brand-name {
@@ -5096,7 +6032,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .brand-copy small {
-          color: #64748b;
+          color: #10b981;
           font-weight: 700;
         }
 
@@ -5129,13 +6065,13 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           width: 0;
           height: 2px;
           border-radius: 999px;
-          background: linear-gradient(90deg, #2563eb, #7c3aed);
+          background: #10b981;
           transition: width 0.2s ease;
         }
 
         .header-nav button:hover,
         .header-nav button.active {
-          color: #7C3AED;
+          color: #10b981;
           background: transparent;
           box-shadow: none;
         }
@@ -5148,17 +6084,17 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .notification-btn,
         .profile-pill,
         .menu-toggle {
-          background: rgba(255, 255, 255, 0.72);
-          border-color: rgba(124, 58, 237, 0.14);
-          box-shadow: 0 12px 24px rgba(37, 99, 235, 0.10);
+          background: rgba(236, 253, 245, 0.82);
+          border-color: rgba(16, 185, 129, 0.18);
+          box-shadow: 0 12px 24px rgba(16, 185, 129, 0.10);
         }
 
         @media (max-width: 900px) {
           .header-nav.active {
             background: rgba(255, 255, 255, 0.96);
-            border: 1px solid rgba(124, 58, 237, 0.14);
+            border: 1px solid rgba(16, 185, 129, 0.16);
             border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(76, 29, 149, 0.14);
+            box-shadow: 0 20px 40px rgba(6, 95, 70, 0.12);
             padding: 12px;
           }
 
@@ -5175,7 +6111,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
           .header-nav button:hover,
           .header-nav button.active {
-            background: #F3E8FF;
+            background: #d1fae5;
           }
         }
 
@@ -5184,7 +6120,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .header-nav button.active,
         .view-all-btn,
         .forgot-link {
-          color: #7C3AED;
+          color: #10b981;
         }
 
         .header-nav button:hover,
@@ -5196,7 +6132,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         @media (max-width: 900px) {
           .header-nav button:hover,
           .header-nav button.active {
-            background: #F3E8FF;
+            background: #d1fae5;
           }
         }
 
@@ -5205,7 +6141,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .sign-in-btn,
         .mini-icon,
         .ai-chat-input button {
-          background: linear-gradient(135deg, #7C3AED, #C084FC);
+          background: linear-gradient(135deg, #10b981, #34d399);
         }
 
         .motivation-banner,
@@ -5217,41 +6153,135 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         .lesson-card-item,
         .class-card-item,
         .ai-chat-panel {
-          border-color: rgba(124, 58, 237, 0.18);
-          box-shadow: 0 20px 44px rgba(76, 29, 149, 0.10);
+          border-color: rgba(16, 185, 129, 0.20);
+          box-shadow: 0 20px 44px rgba(6, 95, 70, 0.08);
         }
 
         .thin-progress span,
         .lesson-progress-fill,
         .subject-progress-fill,
         .subject-progress-fill-home {
-          background: linear-gradient(90deg, #7C3AED, #C084FC);
+          background: linear-gradient(90deg, #10b981, #34d399);
         }
 
         .section-subtitle,
         .sinhala-line,
         .lesson-sinhala {
-          color: #4C1D95;
+          color: #6b7280;
         }
 
         .header-nav button::after {
-          background: #4C1D95;
+          background: #10b981;
         }
 
         .header-nav button:hover,
         .header-nav button.active {
-          color: #4C1D95;
+          color: #10b981;
         }
 
         @media (max-width: 900px) {
           .header-nav button:hover,
           .header-nav button.active {
-            color: #4C1D95;
+            color: #047857;
           }
         }
 
         .dashboard-header .brand-name {
-          color: #4C1D95;
+          color: #111827;
+        }
+
+        .compact-dashboard .motivation-banner {
+          background:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.92) 72%, rgba(236, 253, 245, 0.78) 100%),
+            url("/cover-pic.png") center / cover no-repeat;
+          color: #111827;
+          border: 1px solid #e5e7eb;
+          box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+        }
+
+        .compact-dashboard .motivation-icon {
+          color: #10b981;
+          background: #d1fae5;
+        }
+
+        .compact-dashboard .motivation-banner h2 {
+          color: #111827;
+        }
+
+        .hero-greeting,
+        .sinhala-line {
+          color: #9ca3af;
+        }
+
+        .hero-count-box {
+          background: rgba(255, 255, 255, 0.9);
+          border-color: #e5e7eb;
+          color: #10b981;
+          box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+        }
+
+        .countdown-number {
+          background: #ecfdf5;
+          color: #10b981;
+          border: 1px solid #bbf7d0;
+        }
+
+        .news-item:hover,
+        .news-item:first-child {
+          border-color: rgba(16, 185, 129, 0.24);
+          background: #f0fdf4;
+          box-shadow: 0 14px 28px rgba(6, 95, 70, 0.08);
+        }
+
+        .tag-line span {
+          background: #d1fae5;
+          color: #047857;
+        }
+
+        .compact-news-list::-webkit-scrollbar-track {
+          background: #ecfdf5;
+        }
+
+        .compact-news-list::-webkit-scrollbar-thumb {
+          background: #34d399;
+        }
+
+        .lesson-card-item.green .lesson-progress-fill,
+        .lesson-card-item.teal .lesson-progress-fill,
+        .class-card-item.green .btn,
+        .class-card-item.teal .btn,
+        .class-card-item.purple .btn,
+        .subject-card-modern-home.green .subject-progress-fill-home,
+        .subject-card-modern-home.teal .subject-progress-fill-home,
+        .subject-card-modern-home.purple .subject-progress-fill-home {
+          background: #10b981;
+        }
+
+        .subject-card-modern-home.orange .subject-progress-fill-home {
+          background: #fbbf24;
+        }
+
+        .subject-card-modern-home.sky .subject-progress-fill-home {
+          background: #06b6d4;
+        }
+
+        .ai-floating-btn {
+          background: #34d399;
+          box-shadow: 0 18px 42px rgba(16, 185, 129, 0.28);
+        }
+
+        .ai-chat-head {
+          background: linear-gradient(135deg, #10b981, #06b6d4);
+        }
+
+        .ai-chat-body .ai-user-message {
+          background: #ecfdf5;
+          border-color: #a7f3d0;
+          color: #047857;
+        }
+
+        .ai-chat-input button {
+          background: linear-gradient(135deg, #10b981, #34d399);
         }
       `}</style>
     </div>

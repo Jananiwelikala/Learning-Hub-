@@ -13,6 +13,10 @@ const userSchema = new mongoose.Schema(
     },
     stream: { type: String, trim: true, default: "" },
     subject: { type: String, trim: true, default: "" },
+    subjects: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Subject",
+    }],
     password: { type: String, required: true },
     role: {
       type: String,

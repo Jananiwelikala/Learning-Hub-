@@ -434,6 +434,50 @@ export async function getStudentLessons(token, subjectId) {
   }
 }
 
+export async function getStudentOngoingLessons(token) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/ongoing-lessons`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, lessons: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to fetch ongoing lessons' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function getStudentLessonDetails(token, lessonId) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/lesson/${lessonId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to load lesson details' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 export async function getStudentMcqsByLesson(token, lessonId) {
   try {
     const response = await fetch(`${config.API_BASE_URL}/student/mcqs/lesson/${lessonId}`, {

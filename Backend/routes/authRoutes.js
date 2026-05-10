@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 
 const router = express.Router();
@@ -38,6 +39,9 @@ function normalizeUserInput(body) {
     role,
     stream: String(body.stream || body.streamId || "").trim(),
     subject: String(body.subject || "").trim(),
+    subjects: Array.isArray(body.subjects)
+      ? body.subjects.filter((subjectId) => mongoose.Types.ObjectId.isValid(subjectId))
+      : [],
   };
 }
 
@@ -84,6 +88,7 @@ router.post("/register", async (req, res) => {
       role: userInput.role,
       stream: userInput.stream,
       subject: userInput.subject,
+      subjects: userInput.subjects,
     });
 
     const token = createAuthToken(createdUser);
