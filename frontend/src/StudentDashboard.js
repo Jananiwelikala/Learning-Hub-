@@ -696,8 +696,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const paperYears = [2025, 2024, 2023, 2022, 2021, 2020];
   const paperTypeLabels = { mcq: "MCQ", structured: "Structure", essay: "Essay" };
   const currentPapers = [
-    { title: "MCQ Paper - Part A", questions: 40, duration: 60, difficulty: "Medium" },
-    { title: "MCQ Paper - Part B", questions: 40, duration: 60, difficulty: "Hard" },
+    {
+      title: "MCQ පුහුණුව",
+      questions:
+        selectedLearningLesson?.mcqCount ??
+        selectedLearningLesson?.papers ??
+        selectedLearningLesson?.rawLesson?.pastPaperCount ??
+        0,
+      difficulty: "",
+    },
   ];
   const mapOngoingLessonCard = (lesson, index) => {
     const subjectName = lesson.subject?.name || lesson.subject || "Biology";
@@ -1000,17 +1007,8 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       noteItems: getLessonNoteItems(rawLesson),
       notes: getLessonNoteItems(rawLesson).length,
       papers: rawLesson.pastPaperCount ?? lesson.papers ?? 0,
-      duration: rawLesson.durationMinutes || lesson.duration || 45,
-      views: rawLesson.viewCount ? Number(rawLesson.viewCount).toLocaleString() : lesson.views || "0",
-      updated: rawLesson.updatedLabel || (rawLesson.updatedAt ? new Date(rawLesson.updatedAt).toLocaleDateString() : "Recently"),
-      videoUrl: getLessonVideoItems(rawLesson)[0]?.url || "",
+      mcqCount: result.data?.mcqs?.length ?? 0,
     };
-
-    setSelectedSubject((prev) => prev || {
-      name: rawLesson.subject?.name || lesson.subject || "Biology",
-      sinhala: rawLesson.subject?.sinhalaName || "ජීව විද්‍යාව",
-      color: "green",
-    });
     setSelectedLearningLesson(lessonCard);
     setActiveView("subjects");
     loadOngoingLessons();
@@ -1543,9 +1541,9 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <article className="paper-resource-card" key={paper.title}>
               <div className="paper-card-head">
                 <h4>{paper.title}</h4>
-                <span className={paper.difficulty === "Hard" ? "hard" : ""}>{paper.difficulty}</span>
+                {paper.difficulty && <span className={paper.difficulty === "Hard" ? "hard" : ""}>{paper.difficulty}</span>}
               </div>
-              <p>ⓘ {paper.questions} Questions &nbsp; ◷ {paper.duration} min</p>
+              <p>ⓘ {paper.questions} Questions</p>
               <div className="paper-actions">
                 <button
                   type="button"
@@ -1554,7 +1552,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                 >
                   ⊙ Start
                 </button>
-                <button type="button" className="pdf">↓ PDF</button>
               </div>
             </article>
           ))}
@@ -1721,7 +1718,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                 <span>▤ {lesson.notes}</span>
                 <span>▥ {lesson.papers}</span>
               </div>
-              <button type="button" className="btn solid" onClick={() => setSelectedLearningLesson(lesson)}>
+              <button type="button" className="btn solid" onClick={() => handleContinueHomeLesson(lesson)}>
                 Start Learning →
               </button>
             </article>
@@ -4565,15 +4562,24 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .lesson-resource-view .paper-selector {
-          margin: 0 0 26px;
+          margin: 0 0 18px;
           padding: 0;
           border: 0;
           background: transparent;
         }
 
+        .lesson-resource-view .paper-selector > strong {
+          color: #334155;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
         .lesson-resource-view .paper-year-row button {
-          min-width: 92px;
-          border-radius: 12px;
+          min-width: 74px;
+          min-height: 38px;
+          border-radius: 10px;
+          font-size: 15px;
+          font-weight: 600;
         }
 
         .lesson-resource-view .paper-type-tabs {
@@ -4584,11 +4590,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .lesson-resource-view .paper-type-tabs button {
-          min-width: 118px;
+          min-width: 96px;
+          min-height: 36px;
           border-radius: 11px;
+          font-size: 14px;
+          font-weight: 600;
         }
 
         .lesson-resource-view .paper-resource-grid {
+          grid-template-columns: minmax(240px, 520px);
           gap: 20px;
         }
 
@@ -4740,27 +4750,27 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
         .paper-selector {
           display: grid;
-          gap: 18px;
-          margin-bottom: 30px;
+          gap: 12px;
+          margin-bottom: 22px;
         }
 
         .paper-year-row,
         .paper-type-tabs {
           display: flex;
           flex-wrap: wrap;
-          gap: 14px;
+          gap: 10px;
         }
 
         .paper-year-row button,
         .paper-type-tabs button {
           border: 0;
           border-radius: 10px;
-          min-width: 110px;
-          min-height: 50px;
+          min-width: 82px;
+          min-height: 40px;
           background: #eef2f7;
           color: #1e293b;
-          font-size: 20px;
-          font-weight: 800;
+          font-size: 15px;
+          font-weight: 600;
           cursor: pointer;
         }
 
@@ -4788,7 +4798,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         }
 
         .paper-resource-grid {
-          grid-template-columns: repeat(2, minmax(260px, 1fr));
+          grid-template-columns: minmax(240px, 520px);
         }
 
         .paper-card-head {
@@ -4803,7 +4813,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           border-radius: 999px;
           background: #fef3c7;
           color: #a16207;
-          font-weight: 800;
+          font-weight: 600;
         }
 
         .paper-card-head span.hard {
@@ -4813,16 +4823,16 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
         .paper-actions {
           display: grid;
-          grid-template-columns: 1fr auto;
+          grid-template-columns: 1fr;
           gap: 10px;
-          margin-top: 20px;
+          margin-top: 16px;
         }
 
         .paper-actions button {
-          min-height: 48px;
+          min-height: 42px;
           border-radius: 10px;
-          font-weight: 800;
-          font-size: 16px;
+          font-weight: 600;
+          font-size: 15px;
           cursor: pointer;
         }
 
