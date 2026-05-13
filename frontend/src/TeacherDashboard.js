@@ -966,10 +966,12 @@ function TeacherDashboard({ teacherName, onLogout }) {
     <div className="teacher-shell">
       <aside className={`teacher-sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="sidebar-brand">
-          <div className="brand-mark">👨‍🏫</div>
+          <span className="brand-mark brand-logo-shell">
+            <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+          </span>
           <div>
-            <p className="brand-label">Teacher Panel</p>
-            <p className="brand-subtitle">Learning Hub</p>
+            <p className="brand-label">Learning Hub</p>
+            <p className="brand-subtitle">Teacher Panel</p>
           </div>
         </div>
         <nav className="sidebar-list">

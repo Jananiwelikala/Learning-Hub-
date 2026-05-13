@@ -1042,7 +1042,9 @@ function AdminPanel({ adminName, onLogout }) {
     <div className="admin-shell">
       <aside className={`admin-sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="sidebar-brand">
-          <div className="brand-mark">LH</div>
+          <span className="brand-mark brand-logo-shell">
+            <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+          </span>
           <div>
             <p className="brand-label">Learning Hub</p>
             <p className="brand-subtitle">Admin panel</p>

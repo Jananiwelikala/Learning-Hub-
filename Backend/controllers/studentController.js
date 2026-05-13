@@ -996,6 +996,388 @@ async function getLessonDetails(req, res) {
   }
 }
 
+async function getLessonPastPapers(req, res) {
+  try {
+    const { lessonId } = req.params;
+    const year = req.query.year ? Number(req.query.year) : null;
+    const paperType = req.query.type ? String(req.query.type).toLowerCase() : null;
+
+    console.log('getLessonPastPapers called:', { lessonId, year, paperType });
+
+    if (!isObjectId(lessonId)) {
+      console.log('Invalid lessonId format');
+      return fail(res, 400, "Invalid lesson id");
+    }
+    if (year && Number.isNaN(year)) return fail(res, 400, "Invalid exam year");
+    if (paperType && !["mcq", "structured", "essay", "full"].includes(paperType)) {
+      return fail(res, 400, "Invalid paper type");
+    }
+
+    let payload = [];
+
+    // First, get actual past papers from PastPaper collection
+    const pastPaperFilter = { lesson: lessonId };
+    if (year) pastPaperFilter.examYear = year;
+    if (paperType) pastPaperFilter.paperType = paperType;
+
+    const pastPapers = await PastPaper.find(pastPaperFilter)
+      .sort({ examYear: -1, createdAt: -1 })
+      .lean();
+
+    console.log('Found past papers:', pastPapers.length);
+
+    payload = pastPapers.map((paper) => ({
+      id: paper._id,
+      _id: paper._id,
+      title: paper.title,
+      paperType: paper.paperType,
+      examYear: paper.examYear,
+      questionsCount: paper.questionsCount || 0,
+      durationMinutes: paper.durationMinutes || 0,
+      difficulty: paper.difficulty || "",
+      fileUrl: paper.fileUrl || "",
+      section: paper.section || "",
+      subject: paper.subject,
+      lesson: paper.lesson,
+    }));
+
+    // If no specific type filter or if type is mcq/structured, also check MCQ and AssessmentQuestion collections
+    if (!paperType || ["mcq", "structured"].includes(paperType)) {
+      // First check MCQ collection for MCQ questions
+      if (!paperType || paperType === "mcq") {
+        const mcqFilter = { lesson: lessonId };
+        if (year) {
+          mcqFilter.examYear = year;
+        }
+
+        console.log('Checking MCQ collection with filter:', mcqFilter);
+
+        const mcqs = await MCQ.find(mcqFilter)
+          .sort({ examYear: -1, createdAt: -1 })
+          .lean();
+
+        console.log('Found MCQs:', mcqs.length);
+
+        if (mcqs.length > 0) {
+          // Group MCQs by year
+          const groupedMCQs = {};
+          mcqs.forEach(mcq => {
+            const mcqYear = mcq.examYear || 2025;
+            const key = `mcq_${mcqYear}`;
+            if (!groupedMCQs[key]) {
+              groupedMCQs[key] = {
+                type: 'mcq',
+                year: mcqYear,
+                questions: []
+              };
+            }
+            groupedMCQs[key].questions.push(mcq);
+          });
+
+          // Create virtual papers from grouped MCQs
+          Object.values(groupedMCQs).forEach(group => {
+            const virtualPaper = {
+              id: `virtual_mcq_${group.year}_${lessonId}`,
+              _id: `virtual_mcq_${group.year}_${lessonId}`,
+              title: `MCQ Questions ${group.year}`,
+              paperType: 'mcq',
+              examYear: group.year,
+              questionsCount: group.questions.length,
+              durationMinutes: 30,
+              difficulty: "Medium",
+              fileUrl: "",
+              section: "",
+              subject: null,
+              lesson: lessonId,
+              isVirtual: true
+            };
+            payload.push(virtualPaper);
+            console.log('Added virtual MCQ paper:', virtualPaper.title);
+          });
+        }
+      }
+
+      // Then check AssessmentQuestion collection for MCQ/Structured questions
+      const questionTypes = !paperType ? ["mcq", "structured"] : [paperType];
+      const questionFilter = { lesson: lessonId };
+      questionFilter.$or = questionTypes.map((typeValue) => ({
+        type: typeValue,
+        questionType: typeValue,
+      })).flatMap((match) => [
+        { type: match.type },
+        { questionType: match.questionType },
+      ]);
+
+      if (year) {
+        questionFilter.$and = [
+          {
+            $or: [
+              { year: year },
+              { year: year.toString() },
+              { examYear: year },
+              { examYear: year.toString() }
+            ]
+          }
+        ];
+      }
+
+      console.log('Checking AssessmentQuestion with filter:', JSON.stringify(questionFilter, null, 2));
+
+      let questions = await AssessmentQuestion.find(questionFilter)
+        .sort({ examYear: -1, year: -1, createdAt: -1 })
+        .lean();
+
+      if (questions.length === 0 && year) {
+        console.log('No assessment questions found with year filter, trying without year filter');
+        const filterWithoutYear = { lesson: lessonId };
+        filterWithoutYear.$or = questionTypes.map((typeValue) => ({
+          type: typeValue,
+          questionType: typeValue,
+        })).flatMap((match) => [
+          { type: match.type },
+          { questionType: match.questionType },
+        ]);
+
+        questions = await AssessmentQuestion.find(filterWithoutYear)
+          .sort({ examYear: -1, year: -1, createdAt: -1 })
+          .lean();
+        console.log('Found assessment questions without year filter:', questions.length);
+      }
+
+      console.log('Found assessment questions:', questions.length);
+      if (questions.length > 0) {
+        console.log('Sample question:', {
+          _id: questions[0]._id,
+          type: questions[0].type,
+          questionType: questions[0].questionType,
+          year: questions[0].year,
+          examYear: questions[0].examYear,
+          lesson: questions[0].lesson
+        });
+      }
+
+      const groupedQuestions = {};
+      questions.forEach(question => {
+        const qType = question.type || question.questionType;
+        const qYear = question.year || question.examYear || 2025;
+        const key = `${qType}_${qYear}`;
+        if (!groupedQuestions[key]) {
+          groupedQuestions[key] = {
+            type: qType,
+            year: qYear,
+            questions: []
+          };
+        }
+        groupedQuestions[key].questions.push(question);
+      });
+
+      console.log('Grouped questions:', Object.keys(groupedQuestions));
+
+      Object.values(groupedQuestions).forEach(group => {
+        const virtualPaper = {
+          id: `virtual_${group.type}_${group.year}_${lessonId}`,
+          _id: `virtual_${group.type}_${group.year}_${lessonId}`,
+          title: `${group.type === 'mcq' ? 'MCQ' : 'Structured'} Questions ${group.year}`,
+          paperType: group.type,
+          examYear: group.year,
+          questionsCount: group.questions.length,
+          durationMinutes: group.type === 'mcq' ? 30 : 60,
+          difficulty: "Medium",
+          fileUrl: "",
+          section: "",
+          subject: null,
+          lesson: lessonId,
+          isVirtual: true
+        };
+        payload.push(virtualPaper);
+        console.log('Added virtual paper:', virtualPaper.title);
+      });
+    }
+
+    // Sort by exam year descending, then by type
+    payload.sort((a, b) => {
+      if (a.examYear !== b.examYear) return b.examYear - a.examYear;
+      return a.paperType.localeCompare(b.paperType);
+    });
+
+    console.log('Final payload:', payload.length, 'papers');
+
+    return ok(res, payload);
+  } catch (error) {
+    console.error('getLessonPastPapers error:', error);
+    return fail(res, 500, "Failed to load past papers");
+  }
+}
+
+async function getVirtualPaperQuestions(req, res) {
+  try {
+    const { paperId } = req.params;
+
+    console.log('getVirtualPaperQuestions called:', { paperId });
+
+    if (!paperId || !paperId.startsWith('virtual_')) {
+      return fail(res, 400, "Invalid virtual paper ID");
+    }
+
+    // Parse virtual paper ID: virtual_{type}_{year}_{lessonId}
+    const parts = paperId.split('_');
+    if (parts.length < 4) {
+      return fail(res, 400, "Invalid virtual paper ID format");
+    }
+
+    const paperType = parts[1];
+    const year = parseInt(parts[2]);
+    const lessonId = parts.slice(3).join('_');
+
+    console.log('Parsed virtual paper:', { paperType, year, lessonId });
+
+    if (!isObjectId(lessonId)) {
+      return fail(res, 400, "Invalid lesson ID in virtual paper");
+    }
+
+    if (paperType === 'mcq') {
+      // Handle MCQ questions from the MCQ collection first
+      const mcqFilter = { lesson: lessonId, examYear: year };
+      const mcqs = await MCQ.find(mcqFilter)
+        .sort({ createdAt: 1 })
+        .lean();
+
+      console.log('Found MCQs in MCQ collection:', mcqs.length);
+
+      let assessmentMcqs = [];
+      if (mcqs.length === 0) {
+        const assessmentFilter = {
+          lesson: lessonId,
+          $or: [
+            { questionType: 'mcq' },
+            { type: 'mcq' }
+          ],
+          $and: [
+            {
+              $or: [
+                { year: year },
+                { year: year.toString() },
+                { examYear: year },
+                { examYear: year.toString() }
+              ]
+            }
+          ]
+        };
+
+        assessmentMcqs = await AssessmentQuestion.find(assessmentFilter)
+          .sort({ createdAt: 1 })
+          .lean();
+
+        if (assessmentMcqs.length === 0) {
+          console.log('No assessment MCQs found for selected year, trying fallback without year');
+          delete assessmentFilter.$and;
+          assessmentMcqs = await AssessmentQuestion.find({
+            lesson: lessonId,
+            $or: [
+              { questionType: 'mcq' },
+              { type: 'mcq' }
+            ]
+          })
+            .sort({ createdAt: 1 })
+            .lean();
+        }
+
+        console.log('Found MCQs in AssessmentQuestion collection:', assessmentMcqs.length);
+      }
+
+      const combinedMcqs = [...mcqs, ...assessmentMcqs];
+
+      const transformedMCQs = combinedMcqs.map(mcq => ({
+        _id: mcq._id,
+        id: mcq._id,
+        prompt: mcq.question || mcq.prompt || mcq.questionText || "",
+        options: mcq.options || [],
+        correctOptionIndex: mcq.correctOptionIndex,
+        maxMarks: 1,
+        explanation: mcq.explanation || "",
+        difficulty: mcq.difficulty || "Medium",
+        examYear: mcq.examYear || mcq.year,
+        sourceLabel: mcq.sourceLabel || mcq.paper || `A/L MCQ ${mcq.examYear || mcq.year}`,
+        questionNumber: mcq.questionNumber || 0,
+      }));
+
+      console.log('Returning transformed MCQs:', transformedMCQs.length);
+
+      return ok(res, {
+        paperId,
+        paperType: 'mcq',
+        examYear: year,
+        lesson: lessonId,
+        questions: transformedMCQs
+      });
+    } else {
+      // Handle structured questions (existing logic)
+      // Build query to find questions
+      const questionFilter = { lesson: lessonId };
+
+      // Handle both field names for type and year
+      if (paperType === "structured") {
+        questionFilter.$or = [
+          { type: { $in: ["structured", "strucuture"] } },
+          { questionType: { $in: ["structured", "strucuture"] } }
+        ];
+      } else {
+        questionFilter.$or = [
+          { type: paperType },
+          { questionType: paperType }
+        ];
+      }
+
+      // Handle year filter
+      questionFilter.$and = questionFilter.$and || [];
+      questionFilter.$and.push({
+        $or: [
+          { year: year },
+          { year: year.toString() },
+          { examYear: year },
+          { examYear: year.toString() }
+        ]
+      });
+
+      console.log('Querying questions with filter:', JSON.stringify(questionFilter, null, 2));
+
+      const questions = await AssessmentQuestion.find(questionFilter)
+        .sort({ createdAt: 1 })
+        .lean();
+
+      console.log('Found questions:', questions.length);
+
+      // Transform questions to include correct field names
+      const transformedQuestions = questions.map(question => ({
+        _id: question._id,
+        id: question._id,
+        questionType: question.type || question.questionType,
+        prompt: question.questionText || question.prompt || "Question text not available",
+        options: question.options || [],
+        correctOptionIndex: question.correctOptionIndex,
+        maxMarks: question.marks || question.maxMarks || 1,
+        examYear: question.year || question.examYear || year,
+        sourceLabel: question.paper || question.sourceLabel || `A/L ${paperType.toUpperCase()} ${year}`,
+        questionNumber: question.questionNumber || "",
+        answer: question.answer || "", // Include correct answer for AI evaluation
+      }));
+
+      console.log('Returning transformed questions:', transformedQuestions.length);
+
+      return ok(res, {
+        paperId,
+        paperType,
+        examYear: year,
+        lesson: lessonId,
+        questions: transformedQuestions
+      });
+    }
+  } catch (error) {
+    console.error('getVirtualPaperQuestions error:', error);
+    return fail(res, 500, "Failed to load virtual paper questions");
+  }
+}
+
 async function submitMcq(req, res) {
   try {
     const { lessonId, questionId, selectedOptionIndex } = req.body;
@@ -1151,7 +1533,7 @@ async function submitStructuredAnswer(req, res) {
       questionType: item.questionType || "structured",
       answerText: String(item.answerText || "").trim(),
       aiStatus: "completed",
-      aiFeedback: "AI feedback saved. Review your answer structure, keywords, and final explanation.",
+      aiFeedback: "",
       aiScore: null,
     }));
 
@@ -1159,12 +1541,35 @@ async function submitStructuredAnswer(req, res) {
       return fail(res, 400, "Each submission requires questionId and answerText");
     }
 
+    const questions = await AssessmentQuestion.find({ _id: { $in: normalized.map((item) => item.questionId) } });
+    const questionMap = Object.fromEntries(questions.map((question) => [String(question._id), question]));
+
+    const evaluatedSubmissions = await Promise.all(
+      normalized.map(async (item) => {
+        const question = questionMap[String(item.questionId)];
+        const questionText = question?.questionText || question?.prompt || "Question text not available";
+        const correctAnswer = question?.answer || question?.prompt || "Correct answer not available";
+
+        const feedback = await evaluateStructuredSubmission({
+          questionPrompt: questionText,
+          answerText: item.answerText,
+          correctAnswer,
+          imagePayloads: [],
+        });
+
+        return {
+          ...item,
+          aiFeedback: feedback,
+        };
+      })
+    );
+
     const lesson = await Lesson.findById(lessonId).select("subject");
     const attempt = await AssessmentAttempt.create({
       student: req.user.id,
       lesson: lessonId,
       questionType: normalized.length > 1 ? "mixed" : normalized[0].questionType,
-      descriptiveAttempt: { submissions: normalized },
+      descriptiveAttempt: { submissions: evaluatedSubmissions },
     });
 
     const progress = await touchProgress({
@@ -1179,7 +1584,7 @@ async function submitStructuredAnswer(req, res) {
       {
         attemptId: attempt._id,
         aiStatus: "completed",
-        aiFeedback: normalized.map((item) => ({
+        aiFeedback: evaluatedSubmissions.map((item) => ({
           questionId: item.questionId,
           feedback: item.aiFeedback,
         })),
@@ -1188,8 +1593,233 @@ async function submitStructuredAnswer(req, res) {
       201
     );
   } catch (error) {
+    console.error('submitStructuredAnswer error:', error);
     return fail(res, 500, "Failed to submit structured answer");
   }
+}
+
+async function submitStructuredAnswerBatch(req, res) {
+  try {
+    const { lessonId, submissions } = req.body;
+    let parsedSubmissions = submissions;
+    if (typeof submissions === 'string') {
+      parsedSubmissions = JSON.parse(submissions);
+    }
+
+    if (!isObjectId(lessonId)) return fail(res, 400, "lessonId is required");
+    if (!Array.isArray(parsedSubmissions) || parsedSubmissions.length === 0) {
+      return fail(res, 400, "At least one answer submission is required");
+    }
+
+    const imageFiles = req.files || [];
+    const imagePayloads = imageFiles.map((file) => ({
+      mimeType: file.mimetype,
+      data: file.buffer.toString('base64'),
+      fileName: file.originalname,
+    }));
+
+    const normalized = parsedSubmissions.map((item) => ({
+      questionId: item.questionId,
+      questionType: item.questionType || "structured",
+      answerText: String(item.answerText || "").trim() || "[Image uploaded]",
+      aiStatus: "completed",
+      aiFeedback: "",
+      aiScore: null,
+    }));
+
+    if (normalized.some((item) => !isObjectId(item.questionId))) {
+      return fail(res, 400, "Each submission requires a valid questionId");
+    }
+
+    const questions = await AssessmentQuestion.find({ _id: { $in: normalized.map((item) => item.questionId) } });
+    const questionMap = Object.fromEntries(questions.map((question) => [String(question._id), question]));
+
+    const evaluatedSubmissions = await Promise.all(
+      normalized.map(async (item) => {
+        const question = questionMap[String(item.questionId)];
+        const questionText = question?.questionText || question?.prompt || "Question text not available";
+        const correctAnswer = question?.answer || question?.prompt || "Correct answer not available";
+
+        const feedback = await evaluateStructuredSubmission({
+          questionPrompt: questionText,
+          answerText: item.answerText,
+          correctAnswer,
+          imagePayloads,
+        });
+
+        return {
+          ...item,
+          aiFeedback: feedback,
+        };
+      })
+    );
+
+    const lesson = await Lesson.findById(lessonId).select("subject");
+    const attempt = await AssessmentAttempt.create({
+      student: req.user.id,
+      lesson: lessonId,
+      questionType: normalized.length > 1 ? "mixed" : normalized[0].questionType,
+      descriptiveAttempt: { submissions: evaluatedSubmissions },
+    });
+
+    const progress = await touchProgress({
+      studentId: req.user.id,
+      lessonId,
+      subjectId: lesson?.subject,
+      progressPercent: 60,
+    });
+
+    return ok(
+      res,
+      {
+        attemptId: attempt._id,
+        aiStatus: "completed",
+        aiFeedback: evaluatedSubmissions.map((item) => ({
+          questionId: item.questionId,
+          feedback: item.aiFeedback,
+        })),
+        progress,
+      },
+      201
+    );
+  } catch (error) {
+    console.error('submitStructuredAnswerBatch error:', error);
+    return fail(res, 500, "Failed to submit structured answers");
+  }
+}
+
+async function submitStructuredAnswerWithImage(req, res) {
+  try {
+    const { lessonId, questionId } = req.body;
+    const imageFile = req.file;
+
+    if (!isObjectId(lessonId)) return fail(res, 400, "lessonId is required");
+    if (!isObjectId(questionId)) return fail(res, 400, "questionId is required");
+    if (!imageFile) return fail(res, 400, "Image file is required");
+
+    // Get the question details
+    const question = await AssessmentQuestion.findById(questionId);
+    if (!question) return fail(res, 404, "Question not found");
+
+    // Use the correct fields from the database
+    const questionText = question.questionText || question.prompt || "Question text not available";
+    const correctAnswer = question.answer || question.prompt || "Correct answer not available";
+
+    // Use Gemini Vision API to analyze the image
+    const imageBase64 = imageFile.buffer.toString('base64');
+    const mimeType = imageFile.mimetype;
+
+    const aiFeedback = await evaluateHandwrittenAnswer(imageBase64, mimeType, correctAnswer, questionText);
+
+    // Create attempt record
+    const lesson = await Lesson.findById(lessonId).select("subject");
+    const attempt = await AssessmentAttempt.create({
+      student: req.user.id,
+      lesson: lessonId,
+      questionType: "structured",
+      descriptiveAttempt: {
+        submissions: [{
+          questionId,
+          questionType: "structured",
+          answerText: "[Image uploaded]",
+          aiStatus: "completed",
+          aiFeedback,
+          aiScore: null,
+        }]
+      },
+    });
+
+    const progress = await touchProgress({
+      studentId: req.user.id,
+      lessonId,
+      subjectId: lesson?.subject,
+      progressPercent: 60,
+    });
+
+    return ok(res, {
+      attemptId: attempt._id,
+      aiFeedback,
+      progress,
+    }, 201);
+  } catch (error) {
+    return fail(res, 500, "Failed to submit structured answer with image");
+  }
+}
+
+async function evaluateStructuredSubmission({ questionPrompt, answerText = '', correctAnswer, imagePayloads = [] }) {
+  if (!process.env.GEMINI_API_KEY) {
+    return "AI අගය ලබාගත නොහැක - API යතුර සකස් කර නැත.";
+  }
+
+  try {
+    const contentParts = [
+      {
+        text: `ඔබ සිංහල AI ගුරු වශයෙන් structured ප්‍රශ්නයක් විශ්ලේෂණය කරන්නේය.
+
+ප්‍රශ්නය: ${questionPrompt}
+
+නිවැරදි පිළිතුර: ${correctAnswer}
+
+සිසුන්ගේ පිළිතුර: ${answerText || '[Image uploaded]'}
+
+ඔබේ පිළිතුර පහත ආකාරයෙන් පමණක් පිළිතුරු දෙන්න:
+Correct Answer: ${correctAnswer}
+Result: Correct/Incorrect
+Explanation: (කුඩා පැහැදිලි, පිළිතුර නිවැරදියක් නම් ඉතා කෙටි තේරුමක්)
+
+Output only these three lines. Do not add extra sentences.`,
+      },
+    ];
+
+    if (imagePayloads.length > 0) {
+      imagePayloads.forEach((payload) => {
+        contentParts.push({
+          inline_data: {
+            mime_type: payload.mimeType,
+            data: payload.data,
+          },
+        });
+      });
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: contentParts,
+            },
+          ],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gemini API request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to analyze the submission";
+
+    return aiResponse;
+  } catch (error) {
+    console.error("Gemini evaluation error:", error);
+    return "පරිගණක AI විශ්ලේෂණය කරනු නොහැක. නැවත උත්සහ කරන්න.";
+  }
+}
+
+async function evaluateHandwrittenAnswer(imageBase64, mimeType, correctAnswer, questionPrompt) {
+  return evaluateStructuredSubmission({
+    questionPrompt,
+    answerText: '',
+    correctAnswer,
+    imagePayloads: [{ mimeType, data: imageBase64 }],
+  });
 }
 
 async function getProgress(req, res) {
@@ -1543,12 +2173,16 @@ module.exports = {
   getSubjects,
   getLessonsBySubject,
   getLessonDetails,
+  getLessonPastPapers,
+  getVirtualPaperQuestions,
   submitMcq,
   getMcqsByLesson,
   submitMcqSet,
   getProgress,
   getOngoingLessons,
   submitStructuredAnswer,
+  submitStructuredAnswerWithImage,
+  submitStructuredAnswerBatch,
   getClassPosts,
   getChatHistory,
   postChatMessage,

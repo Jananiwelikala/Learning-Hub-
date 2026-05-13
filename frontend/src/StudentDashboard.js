@@ -8,15 +8,19 @@ import {
   getStudentLessons,
   getStudentOngoingLessons,
   getStudentLessonDetails,
+  getStudentLessonPastPapers,
   getStudentMcqsByLesson,
+  getVirtualPaperQuestions,
   submitStudentMcqs,
   sendStudentChatMessage,
   getSubjects,
   getSubjectLessons,
+  getQuestionsForLesson,
 } from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
 import EmptyState from "./components/EmptyState";
+import StructuredQuestionWithImage from "./components/StructuredQuestionWithImage";
 
 function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [activeView, setActiveView] = useState("home");
@@ -35,12 +39,20 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [selectedLearningLesson, setSelectedLearningLesson] = useState(null);
   const [selectedPaperYear, setSelectedPaperYear] = useState(2025);
   const [selectedPaperType, setSelectedPaperType] = useState("mcq");
+  const [selectedPaperSubject, setSelectedPaperSubject] = useState("All");
+  const [currentPapers, setCurrentPapers] = useState([]);
+  const [papersLoading, setPapersLoading] = useState(false);
+  const [papersError, setPapersError] = useState("");
   const [showMcqPractice, setShowMcqPractice] = useState(false);
   const [mcqQuestions, setMcqQuestions] = useState([]);
   const [mcqAnswers, setMcqAnswers] = useState({});
   const [mcqResult, setMcqResult] = useState(null);
   const [mcqLoading, setMcqLoading] = useState(false);
   const [mcqError, setMcqError] = useState("");
+  const [showStructuredPractice, setShowStructuredPractice] = useState(false);
+  const [structuredQuestions, setStructuredQuestions] = useState([]);
+  const [structuredLoading, setStructuredLoading] = useState(false);
+  const [structuredError, setStructuredError] = useState("");
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [classPosts, setClassPosts] = useState([]);
   const [studentSubjectRecords, setStudentSubjectRecords] = useState([]);
@@ -153,6 +165,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   useEffect(() => {
     loadClassPosts(searchFilters);
   }, [searchFilters]);
+
+  // Load past papers when lesson or filters change
+  useEffect(() => {
+    const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
+    console.log('useEffect loadPastPapers: selectedLearningLesson', selectedLearningLesson, 'lessonId', lessonId);
+    if (lessonId) {
+      loadPastPapers(lessonId);
+    }
+  }, [selectedLearningLesson, selectedPaperYear, selectedPaperType]);
 
   const motivationText = "Stay focused. Small daily progress leads to big A/L results.";
   const getColomboGreeting = () => {
@@ -695,17 +716,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   );
   const paperYears = [2025, 2024, 2023, 2022, 2021, 2020];
   const paperTypeLabels = { mcq: "MCQ", structured: "Structure", essay: "Essay" };
-  const currentPapers = [
-    {
-      title: "MCQ පුහුණුව",
-      questions:
-        selectedLearningLesson?.mcqCount ??
-        selectedLearningLesson?.papers ??
-        selectedLearningLesson?.rawLesson?.pastPaperCount ??
-        0,
-      difficulty: "",
-    },
-  ];
   const mapOngoingLessonCard = (lesson, index) => {
     const subjectName = lesson.subject?.name || lesson.subject || "Biology";
     return {
@@ -800,6 +810,27 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     "2021 Biology Paper",
     "2024 Combined Maths Paper",
   ];
+
+  const paperSubjectOptions = [
+    "All",
+    ...new Set(
+      [
+        ...currentPapers.map((paper) => paper.subject).filter(Boolean),
+        ...studentSubjectRecords.map((subject) => subject.name || subject.subject || subject.title).filter(Boolean),
+      ]
+    ),
+  ];
+
+  const filteredCurrentPapers = currentPapers.filter((paper) => {
+    if (selectedPaperSubject === "All") return true;
+    return paper.subject === selectedPaperSubject;
+  });
+
+  useEffect(() => {
+    if (selectedPaperSubject !== "All" && !paperSubjectOptions.includes(selectedPaperSubject)) {
+      setSelectedPaperSubject("All");
+    }
+  }, [paperSubjectOptions, selectedPaperSubject]);
 
   // Handlers
   const handleToggleSetting = (field) => {
@@ -923,7 +954,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     setActiveView("subjects");
   }
 
-  async function handleStartMcqPractice() {
+  async function handleStartMcqPractice(paper = null) {
     const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
     if (!lessonId) {
       setMcqError("Lesson id is missing.");
@@ -944,17 +975,98 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     setMcqResult(null);
     setMcqAnswers({});
 
-    const result = await getStudentMcqsByLesson(token, lessonId);
-    if (result.success) {
-      setMcqQuestions(result.mcqs || []);
-      if (!result.mcqs?.length) {
-        setMcqError("No MCQ questions found for this lesson.");
+    // Check if this is a virtual MCQ paper
+    if (paper && paper.isVirtual && paper.paperType === 'mcq') {
+      const result = await getVirtualPaperQuestions(token, paper.id);
+      if (result.success) {
+        setMcqQuestions(result.data.questions || []);
+        if (!result.data.questions?.length) {
+          setMcqError("No MCQ questions found for this paper.");
+        }
+      } else {
+        setMcqQuestions([]);
+        setMcqError(result.error || "Failed to load MCQ questions.");
       }
     } else {
-      setMcqQuestions([]);
-      setMcqError(result.error || "Failed to load MCQ questions.");
+      // Use the existing endpoint for all MCQs in the lesson
+      const result = await getStudentMcqsByLesson(token, lessonId);
+      let loadedMcqs = [];
+
+      if (result.success && result.mcqs?.length > 0) {
+        loadedMcqs = result.mcqs;
+      } else {
+        const fallback = await getQuestionsForLesson(token, lessonId, "mcq");
+        if (fallback.success && fallback.questions?.length > 0) {
+          loadedMcqs = fallback.questions.map((question) => ({
+            _id: question._id || question.id,
+            id: question._id || question.id,
+            questionText: question.prompt || question.questionText || "",
+            options: (question.options || []).map((option, index) => {
+              if (typeof option === "object") {
+                return {
+                  label: option.label || option.value || String(index + 1),
+                  text: option.text || option.label || option.value || "",
+                };
+              }
+              return {
+                label: String(index + 1),
+                text: String(option || ""),
+              };
+            }),
+            year: question.examYear || question.year,
+            questionNumber: question.questionNumber || 0,
+          }));
+        }
+      }
+
+      if (loadedMcqs.length > 0) {
+        setMcqQuestions(loadedMcqs);
+      } else {
+        setMcqQuestions([]);
+        setMcqError("No MCQ questions found for this lesson.");
+      }
     }
     setMcqLoading(false);
+  }
+
+  async function handleStartStructuredPractice(paper) {
+    const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
+    if (!lessonId) {
+      setStructuredError("Lesson id is missing.");
+      setShowStructuredPractice(true);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setStructuredError("Please login again to start structured practice.");
+      setShowStructuredPractice(true);
+      return;
+    }
+
+    setShowStructuredPractice(true);
+    setStructuredLoading(true);
+    setStructuredError("");
+
+    // Check if this is a virtual paper (from AssessmentQuestion collection)
+    if (paper.isVirtual) {
+      const result = await getVirtualPaperQuestions(token, paper.id);
+      if (result.success) {
+        setStructuredQuestions(result.data.questions || []);
+        if (!result.data.questions?.length) {
+          setStructuredError("No structured questions found for this paper.");
+        }
+      } else {
+        setStructuredQuestions([]);
+        setStructuredError(result.error || "Failed to load structured questions.");
+      }
+    } else {
+      // For real past papers, use existing logic or show message
+      setStructuredQuestions([]);
+      setStructuredError("Structured questions are only available for virtual papers created from assessment questions.");
+    }
+    
+    setStructuredLoading(false);
   }
 
   async function handleSubmitMcqPractice() {
@@ -1012,6 +1124,37 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     setSelectedLearningLesson(lessonCard);
     setActiveView("subjects");
     loadOngoingLessons();
+    loadPastPapers(lessonId); // Load past papers for the selected lesson
+  }
+
+  async function loadPastPapers(lessonId) {
+    if (!lessonId) {
+      console.log('loadPastPapers: no lessonId provided');
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log('loadPastPapers: no token');
+      return;
+    }
+
+    console.log('loadPastPapers: calling API with', { lessonId, year: selectedPaperYear, type: selectedPaperType });
+
+    setPapersLoading(true);
+    setPapersError("");
+
+    const result = await getStudentLessonPastPapers(token, lessonId, selectedPaperYear, selectedPaperType);
+    console.log('loadPastPapers: API result', result);
+
+    if (result.success) {
+      setCurrentPapers(result.pastPapers || []);
+      console.log('loadPastPapers: set papers', result.pastPapers?.length || 0);
+    } else {
+      setPapersError(result.error || "Failed to load past papers");
+      setCurrentPapers([]);
+    }
+    setPapersLoading(false);
   }
 
   async function handleSendAiMessage(nextMessage) {
@@ -1091,7 +1234,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <div className="motivation-content">
           <div className="motivation-icon">🌟</div>
           <p>{motivationText}</p>
-        </div>}
+        </div>
       </div>
 
       <div className="home-top-grid">
@@ -1152,7 +1295,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           >
             View All
           </button>
-        </div>}
+        </div>
         <div className="class-cards-list">
           {(dashboardHomeClasses.length > 0 ? dashboardHomeClasses : homeClasses).map((cls) => (
             <div key={cls.id} className={`class-card-item ${cls.color}`}>
@@ -1510,6 +1653,20 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           </button>
         </div>
         <div className="paper-selector">
+          <strong>Select Subject • විෂය තෝරන්න</strong>
+          <div className="paper-subject-row">
+            <select
+              value={selectedPaperSubject}
+              onChange={(e) => setSelectedPaperSubject(e.target.value)}
+            >
+              {paperSubjectOptions.map((subjectOption) => (
+                <option key={subjectOption} value={subjectOption}>
+                  {subjectOption}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <strong>Select Year • වර්ෂය තෝරන්න</strong>
           <div className="paper-year-row">
             {paperYears.map((year) => (
@@ -1537,24 +1694,50 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           </div>
         </div>
         <div className="paper-resource-grid">
-          {currentPapers.map((paper) => (
-            <article className="paper-resource-card" key={paper.title}>
-              <div className="paper-card-head">
-                <h4>{paper.title}</h4>
-                {paper.difficulty && <span className={paper.difficulty === "Hard" ? "hard" : ""}>{paper.difficulty}</span>}
-              </div>
-              <p>ⓘ {paper.questions} Questions</p>
-              <div className="paper-actions">
-                <button
-                  type="button"
-                  className="start"
-                  onClick={selectedPaperType === "mcq" ? handleStartMcqPractice : undefined}
-                >
-                  ⊙ Start
-                </button>
-              </div>
-            </article>
-          ))}
+          {papersLoading ? (
+            <LoadingSpinner message="Loading past papers..." />
+          ) : papersError ? (
+            <ErrorMessage message={papersError} showIcon={false} />
+          ) : filteredCurrentPapers.length === 0 ? (
+            <EmptyState
+              icon="▥"
+              title="No papers found"
+              message={`No ${paperTypeLabels[selectedPaperType]} papers found for ${selectedPaperYear}${selectedPaperSubject && selectedPaperSubject !== "All" ? ` / ${selectedPaperSubject}` : ""}`}
+            />
+          ) : (
+            filteredCurrentPapers.map((paper) => (
+              <article className="paper-resource-card" key={paper.id || paper._id}>
+                <div className="paper-card-head">
+                  <h4>{paper.title || `${paperTypeLabels[paper.paperType]} Questions`}</h4>
+                  {paper.difficulty && <span className={paper.difficulty === "Hard" ? "hard" : ""}>{paper.difficulty}</span>}
+                </div>
+                <p>ⓘ {paper.questionsCount || 0} Questions</p>
+                <div className="paper-actions">
+                  {paper.paperType === "structured" ? (
+                    <button
+                      type="button"
+                      className="start"
+                      onClick={() => handleStartStructuredPractice(paper)}
+                    >
+                      ⊙ Start Structured
+                    </button>
+                  ) : paper.paperType === "mcq" ? (
+                    <button
+                      type="button"
+                      className="start"
+                      onClick={() => handleStartMcqPractice(paper)}
+                    >
+                      ⊙ Start MCQ
+                    </button>
+                  ) : (
+                    <button type="button" className="start" disabled>
+                      ⊙ Coming Soon
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))
+          )}
         </div>
         {showMcqPractice && (
           <div className="mcq-practice-panel">
@@ -1636,6 +1819,37 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                 <strong>{mcqResult.score} / {mcqResult.total}</strong>
                 <p>{mcqResult.percentage}%</p>
               </div>
+            )}
+          </div>
+        )}
+        {showStructuredPractice && (
+          <div className="structured-practice-panel">
+            <div className="structured-practice-head">
+              <div>
+                <h3>Structured Questions Practice</h3>
+                <p>{selectedLearningLesson.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStructuredPractice(false);
+                  setStructuredError("");
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            {structuredLoading && <LoadingSpinner message="Loading structured questions..." />}
+            {structuredError && <ErrorMessage message={structuredError} showIcon={false} />}
+
+            {!structuredLoading && structuredQuestions.length > 0 && (
+              <StructuredQuestionWithImage
+                questions={structuredQuestions}
+                token={localStorage.getItem("token")}
+                lessonId={selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id}
+                onClose={() => setShowStructuredPractice(false)}
+              />
             )}
           </div>
         )}
@@ -1803,7 +2017,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const renderStreamClasses = () => (
     <div className="dashboard-view-content premium-dashboard">
       {/* Hero Section */}
-      <section className="hero-section premium-hero">
+      <section className="hero-section">
         <div className="hero-content">
           <div className="hero-main">
             {/* Main Heading */}
@@ -2301,7 +2515,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <div>
           <h2>AI Study Chat</h2>
           <p>Ask your A/L study questions in one focused screen.</p>
-        </div>}
+        </div>
         <button type="button" className="btn outline" onClick={() => setActiveView("home")}>
           Back to Dashboard
         </button>
@@ -2570,7 +2784,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                 {isAiMaximized ? "−" : "□"}
               </button>
               <button type="button" aria-label="Close chatbot" onClick={() => setShowAiPanel(false)}>×</button>
-            </div>}
+            </div>
           </div>
           <div className="ai-chat-body">
             {aiMessages.map((chatMessage, index) => (

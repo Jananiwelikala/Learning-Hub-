@@ -478,6 +478,33 @@ export async function getStudentLessonDetails(token, lessonId) {
   }
 }
 
+export async function getStudentLessonPastPapers(token, lessonId, year = null, type = null) {
+  try {
+    const params = new URLSearchParams();
+    if (year) params.append('year', year);
+    if (type) params.append('type', type);
+    const query = params.toString() ? `?${params.toString()}` : '';
+
+    const response = await fetch(`${config.API_BASE_URL}/student/lesson/${lessonId}/pastpapers${query}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, pastPapers: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to load past papers' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 export async function getStudentMcqsByLesson(token, lessonId) {
   try {
     const response = await fetch(`${config.API_BASE_URL}/student/mcqs/lesson/${lessonId}`, {
@@ -546,6 +573,28 @@ export async function sendStudentChatMessage(token, payload) {
   }
 }
 
+export async function getVirtualPaperQuestions(token, paperId) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/virtual-paper/${paperId}/questions`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to load virtual paper questions' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 export async function getQuestionsForLesson(token, lessonId, questionType = null) {
   try {
     const queryParams = new URLSearchParams();
@@ -601,7 +650,7 @@ export async function submitMCQAnswer(token, lessonId, questionId, selectedOptio
 
 export async function submitStructuredAnswer(token, lessonId, submissions) {
   try {
-    const response = await fetch(`${config.API_BASE_URL}/assessments/submit-descriptive`, {
+    const response = await fetch(`${config.API_BASE_URL}/student/structured-answer/submit`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -616,10 +665,68 @@ export async function submitStructuredAnswer(token, lessonId, submissions) {
     const data = await response.json();
 
     if (response.ok) {
-      return { success: true, attemptId: data.attemptId };
+      return { success: true, data };
     } else {
       return { success: false, error: data.message || 'Failed to submit answer' };
     }
+  } catch (error) {
+    console.error('Structured submit error:', error);
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function submitStructuredAnswerWithImage(token, lessonId, questionId, imageFile) {
+  try {
+    const formData = new FormData();
+    formData.append('lessonId', lessonId);
+    formData.append('questionId', questionId);
+    formData.append('image', imageFile);
+
+    const response = await fetch(`${config.API_BASE_URL}/student/structured-answer/submit-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to submit structured answer with image' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function submitStructuredAnswersBatch(token, lessonId, submissions, images = []) {
+  try {
+    const formData = new FormData();
+    formData.append('lessonId', lessonId);
+    formData.append('submissions', JSON.stringify(submissions));
+
+    images.forEach((imageFile) => {
+      formData.append('images', imageFile);
+    });
+
+    const response = await fetch(`${config.API_BASE_URL}/student/structured-answer/submit-batch`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, data: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to submit structured answers' };
   } catch (error) {
     return { success: false, error: 'Network error. Please check your connection.' };
   }
