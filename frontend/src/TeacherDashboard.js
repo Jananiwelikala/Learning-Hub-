@@ -23,7 +23,10 @@ const emptyPostForm = {
   description: "",
   subject: "",
   type: "",
+  grade: "",
   district: "",
+  schedule: "",
+  duration: "",
   fee: "",
   contactInfo: "",
   image: null,
@@ -159,7 +162,10 @@ function TeacherDashboard({ teacherName, onLogout }) {
       !formState.description ||
       !formState.subject ||
       !formState.type ||
+      !formState.grade ||
       !formState.district ||
+      !formState.schedule ||
+      !formState.duration ||
       !formState.contactInfo
     ) {
       alert("Please fill all required fields before saving.");
@@ -170,7 +176,17 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
     const token = localStorage.getItem("token");
     const payload = {
-      ...formState,
+      title: formState.title.trim(),
+      description: formState.description.trim(),
+      subject: formState.subject,
+      grade: formState.grade,
+      location: formState.type === "Online"
+        ? `Online - ${formState.district.trim()}`
+        : `${formState.type} - ${formState.district.trim()}`,
+      schedule: formState.schedule.trim(),
+      duration: formState.duration.trim(),
+      fee: Number(formState.fee || 0),
+      contactInfo: formState.contactInfo.trim(),
       status,
     };
 
@@ -517,6 +533,16 @@ function TeacherDashboard({ teacherName, onLogout }) {
             </label>
 
             <label>
+              Grade / Exam Year *
+              <input
+                type="text"
+                value={formState.grade}
+                onChange={(event) => handleFormChange("grade", event.target.value)}
+                placeholder="Example: 2026 A/L, 2027 A/L"
+              />
+            </label>
+
+            <label>
               District / City *
               <input
                 type="text"
@@ -527,9 +553,30 @@ function TeacherDashboard({ teacherName, onLogout }) {
             </label>
 
             <label>
+              Schedule *
+              <input
+                type="text"
+                value={formState.schedule}
+                onChange={(event) => handleFormChange("schedule", event.target.value)}
+                placeholder="Example: Sunday 8.00 AM - 10.00 AM"
+              />
+            </label>
+
+            <label>
+              Duration *
+              <input
+                type="text"
+                value={formState.duration}
+                onChange={(event) => handleFormChange("duration", event.target.value)}
+                placeholder="Example: 2 hours / 6 months course"
+              />
+            </label>
+
+            <label>
               Monthly Fee (Rs.)
               <input
                 type="number"
+                min="0"
                 value={formState.fee}
                 onChange={(event) => handleFormChange("fee", event.target.value)}
                 placeholder="Example: 2500"

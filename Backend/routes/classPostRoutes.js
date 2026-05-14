@@ -30,18 +30,22 @@ router.post("/", auth, roleMiddleware("teacher"), async (req, res) => {
       duration,
       fee,
       contactInfo,
-      status = "draft"
+      status = "draft",
+      type,
+      district
     } = req.body;
+
+    const normalizedLocation = location || (type && district ? `${type} - ${district}` : district);
 
     const post = await ClassPost.create({
       title,
       description,
       subject,
       grade,
-      location,
+      location: normalizedLocation,
       schedule,
       duration,
-      fee,
+      fee: Number(fee || 0),
       contactInfo,
       teacher: req.user.id,
       status
