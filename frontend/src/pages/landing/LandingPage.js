@@ -205,7 +205,7 @@ function Footer({ onHomeClick, onSubjectsClick, onAboutClick, onLoginClick, onRe
                 className="brand-logo-image"
                 onError={(event) => {
                   event.currentTarget.style.display = "none";
-                  event.currentTarget.parentElement.textContent = "LH";
+                  event.currentTarget.parentElement.textContent = "AL";
                 }}
               />
             </span>
@@ -248,30 +248,46 @@ function Footer({ onHomeClick, onSubjectsClick, onAboutClick, onLoginClick, onRe
   );
 }
 
-function RegisterModal({ onClose, onRegisterClick, onLoginClick }) {
+function RegisterModal({
+  onClose,
+  onRegisterClick,
+  onLoginClick,
+  title = "Create your free student account",
+  message = "Register once to access notes, videos, past paper practice, AI support, and progress tracking.",
+}) {
   return (
     <div className="register-modal-backdrop" onClick={onClose}>
       <div className="register-modal-card" onClick={(event) => event.stopPropagation()}>
-        <button className="modal-close-btn" type="button" onClick={onClose}>
+        <button className="modal-close-btn" type="button" onClick={onClose} aria-label="Close">
           ×
         </button>
 
-        <div className="modal-icon">🎓</div>
-        <h3>Register to Continue</h3>
-        <p>
-          AI study support, lessons, notes, past paper practice, and progress
-          tracking are available after creating a free account.
-        </p>
+        <div className="modal-top-row">
+          <div className="modal-icon">🎓</div>
+          <div className="modal-title-block">
+            <span>Free access</span>
+            <h3>{title}</h3>
+          </div>
+        </div>
+
+        <p className="modal-message">{message}</p>
+
+        <div className="modal-benefits">
+          <span>📘 Organized subjects</span>
+          <span>📝 Past paper practice</span>
+          <span>🤖 AI study support</span>
+        </div>
+
         <p className="modal-sinhala">
-          AI සහාය සහ පාඩම් භාවිතා කිරීමට නොමිලේ ලියාපදිංචි වන්න.
+          පාඩම්, සටහන් සහ AI සහාය ලබාගැනීමට නොමිලේ ලියාපදිංචි වන්න.
         </p>
 
         <div className="modal-actions">
           <button className="btn solid" onClick={onRegisterClick}>
-            Register Now
+            Register Free
           </button>
           <button className="btn outline" onClick={onLoginClick}>
-            I already have an account
+            Login instead
           </button>
         </div>
       </div>
@@ -289,7 +305,8 @@ function LandingPage({
 }) {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
 
-  const closeRegisterModal = () => setShowRegisterModal(false);
+  const openAccessModal = () => setShowRegisterModal(true);
+  const closeAccessModal = () => setShowRegisterModal(false);
 
   const handleHomeClick = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -338,7 +355,7 @@ function LandingPage({
               <button className="btn solid" onClick={onRegisterClick}>
                 Start Learning
               </button>
-              <button className="btn outline" onClick={() => setShowRegisterModal(true)}>
+              <button className="btn outline" onClick={openAccessModal}>
                 Try AI Support
               </button>
             </div>
@@ -518,13 +535,15 @@ function LandingPage({
 
       {showRegisterModal && (
         <RegisterModal
-          onClose={closeRegisterModal}
+          title="Try AI support after free registration"
+          message="Create your free account to ask subject-related questions and get study support inside Learning Hub."
+          onClose={closeAccessModal}
           onRegisterClick={() => {
-            closeRegisterModal();
+            closeAccessModal();
             onRegisterClick();
           }}
           onLoginClick={() => {
-            closeRegisterModal();
+            closeAccessModal();
             onLoginClick();
           }}
         />
@@ -542,10 +561,10 @@ export function SubjectsPage({
   onRegisterClick,
   onLogout,
   onAboutClick,
-  onSelectSubject,
 }) {
   const [selectedStream, setSelectedStream] = useState("biology");
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [selectedSubjectName, setSelectedSubjectName] = useState("");
 
   const activeStreamData =
     streamConfig.find((stream) => stream.id === selectedStream) || streamConfig[0];
@@ -573,8 +592,8 @@ export function SubjectsPage({
             <span className="section-kicker">Choose your A/L stream</span>
             <h2>Subjects for Every Stream</h2>
             <p>
-              Select your stream and explore organized A/L subjects with lessons,
-              notes, past paper practice, and AI learning support.
+              Select your stream and explore organized A/L subjects with notes,
+              past paper practice, class details, and AI learning support.
             </p>
           </div>
 
@@ -607,8 +626,8 @@ export function SubjectsPage({
             </div>
 
             <div className="subject-card-grid">
-              {visibleSubjects.map((subject, index) => (
-                <article className={`subject-card subject-tone-${index % 4}`} key={subject.name}>
+              {visibleSubjects.map((subject) => (
+                <article className="subject-card" key={subject.name}>
                   <div className="subject-card-top">
                     <div className="subject-icon">{subject.icon}</div>
                     <span className="status-pill">Available</span>
@@ -622,18 +641,11 @@ export function SubjectsPage({
                     className="view-lessons-btn"
                     type="button"
                     onClick={() => {
-                      if (token && onSelectSubject) {
-                        onSelectSubject({
-                          id: subject.id || subject.name,
-                          name: subject.name,
-                          streamName: activeStreamData.title,
-                        });
-                        return;
-                      }
+                      setSelectedSubjectName(subject.name);
                       setShowRegisterModal(true);
                     }}
                   >
-                    {token ? "Open Subject" : "Register to View"}
+                    Register to View
                   </button>
                 </article>
               ))}
@@ -652,6 +664,8 @@ export function SubjectsPage({
 
       {showRegisterModal && (
         <RegisterModal
+          title={selectedSubjectName ? `Register to view ${selectedSubjectName}` : "Register to view subject content"}
+          message="Create your free student account to continue with subject content, notes, questions, and AI support."
           onClose={closeRegisterModal}
           onRegisterClick={() => {
             closeRegisterModal();
@@ -701,12 +715,12 @@ export function AboutUs({
               <p className="about-lead">
                 Learning Hub is an AI-powered online learning platform designed for
                 G.C.E. Advanced Level students in Sri Lanka. It helps students access
-                lessons, notes, past paper practice, teacher class details, and AI study
+                subjects, notes, past paper practice, teacher class details, and AI study
                 support in one simple place.
               </p>
 
               <p className="about-sinhala">
-                Learning Hub මගින් සිසුන්ට පාඩම්, සටහන්, පසුගිය ප්‍රශ්න පත්‍ර,
+                Learning Hub මගින් සිසුන්ට විෂයන්, සටහන්, පසුගිය ප්‍රශ්න පත්‍ර,
                 AI සහාය සහ පන්ති විස්තර එකම තැනකින් ලබාගත හැක.
               </p>
 
@@ -727,7 +741,7 @@ export function AboutUs({
                 <div className="about-highlight-list">
                   <div>
                     <span>📚</span>
-                    <p>Organized stream-based lessons</p>
+                    <p>Organized stream-based subjects</p>
                   </div>
                   <div>
                     <span>📝</span>
