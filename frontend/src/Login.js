@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { login } from "./api";
 
-// Styled login screen matching the dashboard theme.
 function Login({ onLogin, onClose, onSwitchRegister }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,8 +21,8 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
 
       if (result.success && result.token) {
         setMessageType("success");
-        onLogin(result);
         setMessage("Login successful");
+        onLogin(result);
       } else {
         setMessageType("error");
         setMessage(result.error || "Login failed");
@@ -37,37 +36,55 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
   }
 
   return (
-    <div className="login-page">
-      <header className="login-topbar">
-        <div className="login-brand">
-          <span className="login-brand-mark login-brand-logo-shell">
-            <img src="/logo1.png" alt="Learning Hub logo" className="login-brand-logo-image" />
-          </span>
-          <span className="login-brand-name">Learning Hub</span>
-        </div>
+    <div className="auth-v2-page">
+      <div className="auth-v2-shell auth-v2-login-shell">
+        <div className="auth-v2-crown" aria-hidden="true">♛</div>
 
-        <button className="back-home" onClick={onClose}>
-          &larr; Back to Home
-        </button>
-      </header>
+        <div className="auth-v2-panel">
+          <button type="button" className="auth-v2-close" onClick={onClose} aria-label="Back to home">
+            ×
+          </button>
 
-      <main className="login-main">
-        <div className="login-layout">
-          <section className="login-card">
-            <div className="login-icon-badge">👤</div>
-
-            <div className="login-headline">
-              <h1>Welcome Back!</h1>
-              <p>Sign in to continue your learning journey</p>
-              <p className="login-accent-text">
-                Continue your Learning Hub journey with confidence.
-              </p>
+          <section className="auth-v2-visual" aria-label="Learning Hub illustration">
+            <div className="auth-v2-mini-nav">
+              <span className="auth-v2-menu">☰</span>
+              <div className="auth-v2-logo-wrap">
+                <img src="/logo1.png" alt="Learning Hub" />
+                <strong>Learning Hub</strong>
+              </div>
             </div>
 
-            <form className="login-form" onSubmit={handleSubmit}>
+            <div className="auth-v2-paper-plane" aria-hidden="true">
+              <span className="plane-wing plane-wing-one" />
+              <span className="plane-wing plane-wing-two" />
+            </div>
+
+            <div className="auth-v2-study-scene" aria-hidden="true">
+              <span className="leaf leaf-one" />
+              <span className="leaf leaf-two" />
+              <span className="leaf leaf-three" />
+              <span className="student-head" />
+              <span className="student-hair" />
+              <span className="student-body" />
+              <span className="student-laptop" />
+            </div>
+
+            <span className="auth-v2-shape plus-one">+</span>
+            <span className="auth-v2-shape plus-two">+</span>
+            <span className="auth-v2-shape dot-one" />
+            <span className="auth-v2-shape dot-two" />
+          </section>
+
+          <section className="auth-v2-form-side">
+            <div className="auth-v2-avatar" aria-hidden="true">👤</div>
+            <div className="auth-v2-title">
+              <h1>Welcome Back</h1>
+              <p>Login to continue your A/L learning journey.</p>
+            </div>
+
+            <form className="auth-v2-form" onSubmit={handleSubmit}>
               <label htmlFor="login-email">Email Address</label>
-              <div className="input-wrap">
-                <span className="input-symbol">✉</span>
+              <div className="auth-v2-input">
                 <input
                   id="login-email"
                   type="email"
@@ -76,11 +93,11 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
+                <span aria-hidden="true">✉</span>
               </div>
 
               <label htmlFor="login-password">Password</label>
-              <div className="input-wrap">
-                <span className="input-symbol">🔒</span>
+              <div className="auth-v2-input">
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
@@ -91,7 +108,7 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
                 />
                 <button
                   type="button"
-                  className="icon-btn"
+                  className="auth-v2-show-btn"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
@@ -99,8 +116,8 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
                 </button>
               </div>
 
-              <div className="login-row">
-                <label className="remember-check">
+              <div className="auth-v2-options">
+                <label className="auth-v2-check">
                   <input
                     type="checkbox"
                     checked={rememberMe}
@@ -108,32 +125,24 @@ function Login({ onLogin, onClose, onSwitchRegister }) {
                   />
                   <span>Remember me</span>
                 </label>
-                <button type="button" className="forgot-link">
-                  Forgot Password?
-                </button>
+                <button type="button" className="auth-v2-link-btn">Forgot Password?</button>
               </div>
 
-              <button type="submit" className="sign-in-btn" disabled={isSubmitting}>
+              <button type="submit" className="auth-v2-primary" disabled={isSubmitting}>
                 {isSubmitting ? <span className="btn-spinner" aria-hidden="true" /> : null}
-                {isSubmitting ? "Signing In..." : "Sign In"}
+                {isSubmitting ? "Logging in..." : "Login"}
               </button>
 
-              <div className="login-divider">
-                <span>or continue with</span>
-              </div>
-
-              <p className="register-hint">
+              <p className="auth-v2-bottom-text">
                 Don&apos;t have an account?{" "}
-                <button type="button" onClick={onSwitchRegister}>
-                  Register Now
-                </button>
+                <button type="button" onClick={onSwitchRegister}>Create an account</button>
               </p>
             </form>
 
-            {message ? <p className={`login-message ${messageType}`}>{message}</p> : null}
+            {message ? <p className={`auth-v2-message ${messageType}`}>{message}</p> : null}
           </section>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

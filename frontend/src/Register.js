@@ -2,8 +2,7 @@ import { useState } from "react";
 import { register } from "./api";
 import "./App.css";
 
-// Registration screen with role selection and basic validation.
-function Register({ role, onLogin, onClose, onSwitchLogin }) {
+function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -16,14 +15,14 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
   const [messageType, setMessageType] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Student specific fields
   const [stream, setStream] = useState("");
   const [alYear, setAlYear] = useState("");
 
-  // Teacher specific fields
   const [subject, setSubject] = useState("");
   const [teachingMode, setTeachingMode] = useState("");
   const [institute, setInstitute] = useState("");
+
+  const isTeacher = role === "teacher";
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -59,13 +58,13 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
         role,
       };
 
-      if (role === "student") {
-        payload.stream = stream;
-        payload.alYear = alYear;
-      } else {
+      if (isTeacher) {
         payload.subject = subject;
         payload.teachingMode = teachingMode;
         payload.institute = institute;
+      } else {
+        payload.stream = stream;
+        payload.alYear = alYear;
       }
 
       const result = await register(payload);
@@ -79,15 +78,11 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
       if (result.token) {
         setMessageType("success");
         setMessage("Account created! Redirecting to your dashboard...");
-        setTimeout(() => {
-          onLogin(result);
-        }, 800);
+        setTimeout(() => onLogin(result), 800);
       } else {
         setMessageType("success");
         setMessage("Account created successfully. Please login.");
-        setTimeout(() => {
-          onSwitchLogin();
-        }, 1500);
+        setTimeout(() => onSwitchLogin(), 1500);
       }
     } catch (err) {
       setMessageType("error");
@@ -98,30 +93,55 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
   }
 
   return (
-    <div className="login-page register-page">
-      <header className="login-topbar">
-        <button className="back-home" onClick={onClose}>
-          &larr; Back to Home
-        </button>
-        <div className="login-brand">
-          <span className="login-brand-mark login-brand-logo-shell">
-            <img src="/logo1.png" alt="Learning Hub logo" className="login-brand-logo-image" />
-          </span>
-          <span className="login-brand-name">Learning Hub</span>
-        </div>
-      </header>
+    <div className="auth-v2-page">
+      <div className="auth-v2-shell auth-v2-register-shell">
+        <div className="auth-v2-crown" aria-hidden="true">♛</div>
 
-      <main className="login-main">
-        <div className="login-layout register-layout">
-          <div className="login-headline">
-            <h2>Create {role === "teacher" ? "Teacher" : "Student"} Account</h2>
-            <p>Start your learning journey today</p>
-          </div>
+        <div className="auth-v2-panel auth-v2-register-panel">
+          <button type="button" className="auth-v2-close" onClick={onClose} aria-label="Back to home">
+            ×
+          </button>
 
-          <section className="login-card register-card">
-            <form className="login-form" onSubmit={handleSubmit}>
+          <section className="auth-v2-visual" aria-label="Learning Hub illustration">
+            <div className="auth-v2-mini-nav">
+              <span className="auth-v2-menu">☰</span>
+              <div className="auth-v2-logo-wrap">
+                <img src="/logo1.png" alt="Learning Hub" />
+                <strong>Learning Hub</strong>
+              </div>
+            </div>
+
+            <div className="auth-v2-paper-plane" aria-hidden="true">
+              <span className="plane-wing plane-wing-one" />
+              <span className="plane-wing plane-wing-two" />
+            </div>
+
+            <div className="auth-v2-study-scene" aria-hidden="true">
+              <span className="leaf leaf-one" />
+              <span className="leaf leaf-two" />
+              <span className="leaf leaf-three" />
+              <span className="student-head" />
+              <span className="student-hair" />
+              <span className="student-body" />
+              <span className="student-laptop" />
+            </div>
+
+            <span className="auth-v2-shape plus-one">+</span>
+            <span className="auth-v2-shape plus-two">+</span>
+            <span className="auth-v2-shape dot-one" />
+            <span className="auth-v2-shape dot-two" />
+          </section>
+
+          <section className="auth-v2-form-side auth-v2-register-form-side">
+            <div className="auth-v2-avatar" aria-hidden="true">🎓</div>
+            <div className="auth-v2-title">
+              <h1>Create {isTeacher ? "Teacher" : "Student"} Account</h1>
+              <p>{isTeacher ? "Share your classes with A/L students." : "Start learning with organized lessons and practice."}</p>
+            </div>
+
+            <form className="auth-v2-form" onSubmit={handleSubmit}>
               <label htmlFor="register-name">Full Name</label>
-              <div className="input-wrap">
+              <div className="auth-v2-input">
                 <input
                   id="register-name"
                   type="text"
@@ -130,12 +150,13 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
+                <span aria-hidden="true">👤</span>
               </div>
 
-              <div className="register-row-2">
+              <div className="auth-v2-grid-2">
                 <div>
                   <label htmlFor="register-email">Email Address</label>
-                  <div className="input-wrap">
+                  <div className="auth-v2-input">
                     <input
                       id="register-email"
                       type="email"
@@ -144,12 +165,13 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
+                    <span aria-hidden="true">✉</span>
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="register-phone">Phone Number</label>
-                  <div className="input-wrap">
+                  <div className="auth-v2-input">
                     <input
                       id="register-phone"
                       type="tel"
@@ -158,51 +180,17 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                       onChange={(e) => setPhone(e.target.value)}
                       required
                     />
+                    <span aria-hidden="true">☎</span>
                   </div>
                 </div>
               </div>
 
-              {role === "student" ? (
-                <div className="register-row-2">
-                  <div>
-                    <label htmlFor="register-stream">Select Your Stream</label>
-                    <div className="input-wrap select-wrap">
-                      <select
-                        id="register-stream"
-                        value={stream}
-                        onChange={(e) => setStream(e.target.value)}
-                        required
-                      >
-                        <option value="">Choose stream</option>
-                        <option value="Science">Science</option>
-                        <option value="Commerce">Commerce</option>
-                        <option value="Arts">Arts</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="register-year">A/L Examination Year</label>
-                    <div className="input-wrap select-wrap">
-                      <select
-                        id="register-year"
-                        value={alYear}
-                        onChange={(e) => setAlYear(e.target.value)}
-                        required
-                      >
-                        <option value="">Choose year</option>
-                        <option value="2026 A/L">2026 A/L</option>
-                        <option value="2027 A/L">2027 A/L</option>
-                        <option value="2028 A/L">2028 A/L</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              ) : (
+              {isTeacher ? (
                 <>
-                  <div className="register-row-2">
+                  <div className="auth-v2-grid-2">
                     <div>
                       <label htmlFor="register-subject">Main Subject</label>
-                      <div className="input-wrap select-wrap">
+                      <div className="auth-v2-input auth-v2-select">
                         <select
                           id="register-subject"
                           value={subject}
@@ -221,9 +209,10 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                         </select>
                       </div>
                     </div>
+
                     <div>
                       <label htmlFor="register-mode">Teaching Mode</label>
-                      <div className="input-wrap select-wrap">
+                      <div className="auth-v2-input auth-v2-select">
                         <select
                           id="register-mode"
                           value={teachingMode}
@@ -238,8 +227,9 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                       </div>
                     </div>
                   </div>
+
                   <label htmlFor="register-institute">Institute / Class Name</label>
-                  <div className="input-wrap">
+                  <div className="auth-v2-input">
                     <input
                       id="register-institute"
                       type="text"
@@ -248,14 +238,52 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                       onChange={(e) => setInstitute(e.target.value)}
                       required
                     />
+                    <span aria-hidden="true">🏫</span>
                   </div>
                 </>
+              ) : (
+                <div className="auth-v2-grid-2">
+                  <div>
+                    <label htmlFor="register-stream">Select Your Stream</label>
+                    <div className="auth-v2-input auth-v2-select">
+                      <select
+                        id="register-stream"
+                        value={stream}
+                        onChange={(e) => setStream(e.target.value)}
+                        required
+                      >
+                        <option value="">Choose stream</option>
+                        <option value="Science">Science</option>
+                        <option value="Commerce">Commerce</option>
+                        <option value="Arts">Arts</option>
+                        <option value="Technology">Technology</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="register-year">A/L Examination Year</label>
+                    <div className="auth-v2-input auth-v2-select">
+                      <select
+                        id="register-year"
+                        value={alYear}
+                        onChange={(e) => setAlYear(e.target.value)}
+                        required
+                      >
+                        <option value="">Choose year</option>
+                        <option value="2026 A/L">2026 A/L</option>
+                        <option value="2027 A/L">2027 A/L</option>
+                        <option value="2028 A/L">2028 A/L</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               )}
 
-              <div className="register-row-2">
+              <div className="auth-v2-grid-2">
                 <div>
                   <label htmlFor="register-password">Password</label>
-                  <div className="input-wrap">
+                  <div className="auth-v2-input">
                     <input
                       id="register-password"
                       type={showPassword ? "text" : "password"}
@@ -266,7 +294,7 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                     />
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="auth-v2-show-btn"
                       onClick={() => setShowPassword((prev) => !prev)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
@@ -277,7 +305,7 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
 
                 <div>
                   <label htmlFor="register-confirm">Confirm Password</label>
-                  <div className="input-wrap">
+                  <div className="auth-v2-input">
                     <input
                       id="register-confirm"
                       type={showConfirmPassword ? "text" : "password"}
@@ -288,7 +316,7 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                     />
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="auth-v2-show-btn"
                       onClick={() => setShowConfirmPassword((prev) => !prev)}
                       aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                     >
@@ -298,39 +326,32 @@ function Register({ role, onLogin, onClose, onSwitchLogin }) {
                 </div>
               </div>
 
-              <label className="terms-check">
+              <label className="auth-v2-check auth-v2-terms">
                 <input
                   type="checkbox"
                   checked={agree}
                   onChange={(e) => setAgree(e.target.checked)}
                 />
-                <span>
-                  I agree to the <a href="#home">Terms &amp; Conditions</a> and{" "}
-                  <a href="#home">Privacy Policy</a>
-                </span>
+                <span>I agree to the Terms &amp; Conditions and Privacy Policy</span>
               </label>
 
-              <button type="submit" className="sign-in-btn" disabled={isSubmitting}>
+              <button type="submit" className="auth-v2-primary" disabled={isSubmitting}>
                 {isSubmitting ? <span className="btn-spinner" aria-hidden="true" /> : null}
                 {isSubmitting ? "Creating Account..." : "Create Account"}
               </button>
 
-              <p className="register-hint register-hint-login">
+              <p className="auth-v2-bottom-text">
                 Already have an account?{" "}
-                <button type="button" onClick={onSwitchLogin}>
-                  Login
-                </button>
+                <button type="button" onClick={onSwitchLogin}>Login</button>
               </p>
             </form>
 
-            {message ? <p className={`login-message ${messageType}`}>{message}</p> : null}
+            {message ? <p className={`auth-v2-message ${messageType}`}>{message}</p> : null}
           </section>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
 
 export default Register;
-
-
