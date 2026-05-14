@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   getTeacherPosts,
   createClassPost,
+  updateClassPost,
   deleteClassPost,
   submitPostForApproval,
   getTeacherComments,
@@ -52,6 +53,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [formState, setFormState] = useState(emptyPostForm);
+  const [editingPostId, setEditingPostId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingPost, setSavingPost] = useState(false);
   const [error, setError] = useState(null);
@@ -136,6 +138,41 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
   function resetForm() {
     setFormState(emptyPostForm);
+    setEditingPostId(null);
+  }
+
+  function splitLocation(location = "") {
+    const [typePart, ...districtParts] = location.split(" - ");
+    const type = ["Online", "Physical", "Both"].includes(typePart) ? typePart : "";
+    const district = type ? districtParts.join(" - ") : location;
+
+    return {
+      type,
+      district,
+    };
+  }
+
+  function startEditPost(post) {
+    const { type, district } = splitLocation(post.location || post.district || "");
+
+    setFormState({
+      title: post.title || "",
+      description: post.description || "",
+      subject: post.subject || "",
+      type: post.type || type || "",
+      grade: post.grade || "",
+      district: post.district || district || "",
+      schedule: post.schedule || "",
+      duration: post.duration || "",
+      fee: post.fee ?? "",
+      contactInfo: post.contactInfo || "",
+      image: null,
+      imagePreview: post.image || null,
+      status: post.status || "draft",
+    });
+
+    setEditingPostId(post._id);
+    setActiveSection("create");
   }
 
   function handleImageChange(event) {
@@ -179,7 +216,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
       title: formState.title.trim(),
       description: formState.description.trim(),
       subject: formState.subject,
-      grade: formState.grade,
+      grade: formState.grade.trim(),
       location: formState.type === "Online"
         ? `Online - ${formState.district.trim()}`
         : `${formState.type} - ${formState.district.trim()}`,
@@ -191,7 +228,9 @@ function TeacherDashboard({ teacherName, onLogout }) {
     };
 
     try {
-      const result = await createClassPost(token, payload);
+      const result = editingPostId
+        ? await updateClassPost(token, editingPostId, payload)
+        : await createClassPost(token, payload);
 
       if (result.success) {
         await loadTeacherData();
@@ -199,7 +238,9 @@ function TeacherDashboard({ teacherName, onLogout }) {
         setActiveSection("posts");
 
         alert(
-          status === "pending"
+          editingPostId
+            ? "Post updated successfully."
+            : status === "pending"
             ? "Post submitted for approval successfully."
             : "Post saved as draft successfully."
         );
@@ -375,7 +416,13 @@ function TeacherDashboard({ teacherName, onLogout }) {
             <p>Search, filter, submit, or delete your class advertisements.</p>
           </div>
 
-          <button className="teacher-btn teacher-btn-primary" onClick={() => setActiveSection("create")}>
+          <button
+            className="teacher-btn teacher-btn-primary"
+            onClick={() => {
+              resetForm();
+              setActiveSection("create");
+            }}
+          >
             Create New Post
           </button>
         </div>
@@ -434,9 +481,14 @@ function TeacherDashboard({ teacherName, onLogout }) {
                           </span>
                         </div>
 
-                        <p className="teacher-post-subject">{post.subject}</p>
+                        <p className="teacher-post-subject">
+                          {post.subject} • {post.grade || "Grade not added"}
+                        </p>
                         <p className="teacher-post-location">
-                          {post.type || "Class"} • {post.district || "Location not added"}
+                          📍 {post.location || post.district || "Location not added"}
+                        </p>
+                        <p className="teacher-post-location">
+                          🗓️ {post.schedule || "Schedule not added"} • ⏱️ {post.duration || "Duration not added"}
                         </p>
 
                         <p className="teacher-post-description">
@@ -458,9 +510,11 @@ function TeacherDashboard({ teacherName, onLogout }) {
                             </button>
                           )}
 
-                          <button onClick={() => setActiveSection("create")}>
-                            Edit
-                          </button>
+                          {post.status !== "approved" && (
+                            <button onClick={() => startEditPost(post)}>
+                              Edit
+                            </button>
+                          )}
 
                           <button className="danger" onClick={() => removePost(post._id)}>
                             Delete
@@ -483,8 +537,8 @@ function TeacherDashboard({ teacherName, onLogout }) {
       <section className="teacher-panel">
         <div className="teacher-panel-header">
           <div>
-            <p className="teacher-label">Create Advertisement</p>
-            <h2>Create Class Post</h2>
+            <p className="teacher-label">{editingPostId ? "Edit Advertisement" : "Create Advertisement"}</p>
+            <h2>{editingPostId ? "Edit Class Post" : "Create Class Post"}</h2>
             <p>Share your class details clearly so students can contact you easily.</p>
           </div>
         </div>
@@ -617,19 +671,39 @@ function TeacherDashboard({ teacherName, onLogout }) {
           <div className="teacher-form-actions">
             <button
               className="teacher-btn teacher-btn-outline"
-              onClick={() => savePost("draft")}
+              onClick={resetForm}
               disabled={savingPost}
             >
-              {savingPost ? "Saving..." : "Save as Draft"}
+              Cancel
             </button>
 
-            <button
-              className="teacher-btn teacher-btn-primary"
-              onClick={() => savePost("pending")}
-              disabled={savingPost}
-            >
-              {savingPost ? "Submitting..." : "Submit for Approval"}
-            </button>
+            {editingPostId ? (
+              <button
+                className="teacher-btn teacher-btn-primary"
+                onClick={() => savePost(formState.status)}
+                disabled={savingPost}
+              >
+                {savingPost ? "Updating..." : "Update Post"}
+              </button>
+            ) : (
+              <>
+                <button
+                  className="teacher-btn teacher-btn-outline"
+                  onClick={() => savePost("draft")}
+                  disabled={savingPost}
+                >
+                  {savingPost ? "Saving..." : "Save as Draft"}
+                </button>
+
+                <button
+                  className="teacher-btn teacher-btn-primary"
+                  onClick={() => savePost("pending")}
+                  disabled={savingPost}
+                >
+                  {savingPost ? "Submitting..." : "Submit for Approval"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>

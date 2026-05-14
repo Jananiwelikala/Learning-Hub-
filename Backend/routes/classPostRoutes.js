@@ -6,6 +6,38 @@ const roleMiddleware = require("../Middleware/roleMiddleware");
 
 const router = express.Router();
 
+function buildClassPostPayload(body) {
+  const {
+    title,
+    description,
+    subject,
+    grade,
+    location,
+    schedule,
+    duration,
+    fee,
+    contactInfo,
+    status = "draft",
+    type,
+    district,
+  } = body;
+
+  const normalizedLocation = location || (type && district ? `${type} - ${district}` : district || "");
+
+  return {
+    title,
+    description,
+    subject,
+    grade,
+    location: normalizedLocation,
+    schedule,
+    duration,
+    fee: Number(fee || 0),
+    contactInfo,
+    status,
+  };
+}
+
 // TEACHER: Get all posts by the authenticated teacher
 router.get("/my-posts", auth, roleMiddleware("teacher"), async (req, res) => {
   try {
@@ -20,35 +52,9 @@ router.get("/my-posts", auth, roleMiddleware("teacher"), async (req, res) => {
 // TEACHER: Create a new class post
 router.post("/", auth, roleMiddleware("teacher"), async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      subject,
-      grade,
-      location,
-      schedule,
-      duration,
-      fee,
-      contactInfo,
-      status = "draft",
-      type,
-      district
-    } = req.body;
-
-    const normalizedLocation = location || (type && district ? `${type} - ${district}` : district);
-
     const post = await ClassPost.create({
-      title,
-      description,
-      subject,
-      grade,
-      location: normalizedLocation,
-      schedule,
-      duration,
-      fee: Number(fee || 0),
-      contactInfo,
+      ...buildClassPostPayload(req.body),
       teacher: req.user.id,
-      status
     });
 
     await post.populate("teacher", "name email");
@@ -80,8 +86,8 @@ router.put("/:id", auth, roleMiddleware("teacher"), async (req, res) => {
 
     const updatedPost = await ClassPost.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true }
+      buildClassPostPayload(req.body),
+      { new: true, runValidators: true }
     ).populate("teacher", "name email");
 
     res.json(updatedPost);
