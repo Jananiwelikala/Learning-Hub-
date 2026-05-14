@@ -104,7 +104,6 @@ function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
 
           <section className="auth-v2-visual" aria-label="Learning Hub illustration">
             <div className="auth-v2-mini-nav">
-              <span className="auth-v2-menu">☰</span>
               <div className="auth-v2-logo-wrap">
                 <img src="/logo1.png" alt="Learning Hub" />
                 <strong>Learning Hub</strong>
