@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { getStreams, getSubjects } from "../../api";
+import { useState } from "react";
 import "./LandingPage.css";
 
 const streamConfig = [
@@ -120,60 +119,6 @@ const subjectConfig = {
   ],
 };
 
-
-function slugify(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "stream";
-}
-
-function streamTheme(name, index) {
-  const lower = String(name || "").toLowerCase();
-  if (lower.includes("bio")) return "biology";
-  if (lower.includes("math")) return "maths";
-  if (lower.includes("commerce") || lower.includes("business")) return "commerce";
-  if (lower.includes("art")) return "arts";
-  return ["biology", "maths", "commerce", "arts"][index % 4];
-}
-
-function buildStreamCards(streams, subjects) {
-  if (!Array.isArray(streams) || streams.length === 0) return streamConfig;
-  return streams.map((stream, index) => {
-    const id = stream._id || stream.id || slugify(stream.name);
-    const streamSubjects = (subjects || [])
-      .filter((subject) => String(subject.stream?._id || subject.stream || "") === String(id))
-      .map((subject) => subject.name)
-      .slice(0, 4);
-    return {
-      id,
-      theme: streamTheme(stream.name, index),
-      icon: stream.icon || "🎓",
-      title: stream.name || "A/L Stream",
-      subtitle: stream.sinhalaName || stream.description || "උසස් පෙළ ධාරාව",
-      subjects: streamSubjects.length ? streamSubjects : ["Subjects updating soon"],
-    };
-  });
-}
-
-function buildSubjectMap(streams, subjects) {
-  if (!Array.isArray(streams) || streams.length === 0 || !Array.isArray(subjects) || subjects.length === 0) return subjectConfig;
-  return streams.reduce((map, stream) => {
-    const id = stream._id || stream.id || slugify(stream.name);
-    map[id] = subjects
-      .filter((subject) => String(subject.stream?._id || subject.stream || "") === String(id))
-      .map((subject) => ({
-        id: subject._id || subject.id,
-        name: subject.name,
-        subtitle: subject.sinhalaName || relationFallback(subject.stream?.name || stream.name),
-        icon: subject.icon || "📘",
-        description: subject.description || `${subject.name} lessons, notes, and past paper practice prepared for A/L students.`,
-      }));
-    return map;
-  }, {});
-}
-
-function relationFallback(value) {
-  return value ? `${value} subject` : "A/L subject";
-}
-
 function Topbar({
   active = "home",
   token,
@@ -253,7 +198,17 @@ function Footer({ onHomeClick, onSubjectsClick, onAboutClick, onLoginClick, onRe
       <div className="footer-grid">
         <div>
           <div className="footer-brand-row">
-            <span className="brand-mark footer-logo">AL</span>
+            <span className="brand-mark footer-logo">
+              <img
+                src="/logo1.png"
+                alt="Learning Hub"
+                className="brand-logo-image"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                  event.currentTarget.parentElement.textContent = "LH";
+                }}
+              />
+            </span>
             <span className="brand-name">Learning Hub</span>
           </div>
           <p>
@@ -304,11 +259,11 @@ function RegisterModal({ onClose, onRegisterClick, onLoginClick }) {
         <div className="modal-icon">🎓</div>
         <h3>Register to Continue</h3>
         <p>
-          Create your free account to access lessons, notes, past paper practice,
-          AI support, and progress tracking.
+          AI study support, lessons, notes, past paper practice, and progress
+          tracking are available after creating a free account.
         </p>
         <p className="modal-sinhala">
-          පාඩම් බැලීමට සහ ඉගෙනීම ආරම්භ කිරීමට ලියාපදිංචි වන්න.
+          AI සහාය සහ පාඩම් භාවිතා කිරීමට නොමිලේ ලියාපදිංචි වන්න.
         </p>
 
         <div className="modal-actions">
@@ -332,6 +287,10 @@ function LandingPage({
   onAboutClick,
   onLogout,
 }) {
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+  const closeRegisterModal = () => setShowRegisterModal(false);
+
   const handleHomeClick = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -343,23 +302,6 @@ function LandingPage({
   const handleAboutClick = () => {
     onAboutClick();
   };
-
-  const [dbStreams, setDbStreams] = useState([]);
-  const [dbSubjects, setDbSubjects] = useState([]);
-
-  useEffect(() => {
-    let mounted = true;
-    async function loadLandingData() {
-      const [streamResult, subjectResult] = await Promise.all([getStreams(), getSubjects()]);
-      if (!mounted) return;
-      if (streamResult.success) setDbStreams(streamResult.streams || []);
-      if (subjectResult.success) setDbSubjects(subjectResult.subjects || []);
-    }
-    loadLandingData();
-    return () => { mounted = false; };
-  }, []);
-
-  const landingStreams = useMemo(() => buildStreamCards(dbStreams, dbSubjects), [dbStreams, dbSubjects]);
 
   return (
     <div className="home">
@@ -396,7 +338,7 @@ function LandingPage({
               <button className="btn solid" onClick={onRegisterClick}>
                 Start Learning
               </button>
-              <button className="btn outline" onClick={onLoginClick}>
+              <button className="btn outline" onClick={() => setShowRegisterModal(true)}>
                 Try AI Support
               </button>
             </div>
@@ -517,7 +459,7 @@ function LandingPage({
           </div>
 
           <div className="stream-grid landing-stream-grid">
-            {landingStreams.slice(0, 3).map((stream) => (
+            {streamConfig.slice(0, 3).map((stream) => (
               <button
                 key={stream.id}
                 className={`stream-card ${stream.theme}`}
@@ -573,6 +515,20 @@ function LandingPage({
           onRegisterClick={onRegisterClick}
         />
       </main>
+
+      {showRegisterModal && (
+        <RegisterModal
+          onClose={closeRegisterModal}
+          onRegisterClick={() => {
+            closeRegisterModal();
+            onRegisterClick();
+          }}
+          onLoginClick={() => {
+            closeRegisterModal();
+            onLoginClick();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -590,32 +546,11 @@ export function SubjectsPage({
 }) {
   const [selectedStream, setSelectedStream] = useState("biology");
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [dbStreams, setDbStreams] = useState([]);
-  const [dbSubjects, setDbSubjects] = useState([]);
-
-  useEffect(() => {
-    let mounted = true;
-    async function loadSubjectData() {
-      const [streamResult, subjectResult] = await Promise.all([getStreams(), getSubjects()]);
-      if (!mounted) return;
-      if (streamResult.success) {
-        const loadedStreams = streamResult.streams || [];
-        setDbStreams(loadedStreams);
-        if (loadedStreams.length) setSelectedStream(loadedStreams[0]._id || loadedStreams[0].id);
-      }
-      if (subjectResult.success) setDbSubjects(subjectResult.subjects || []);
-    }
-    loadSubjectData();
-    return () => { mounted = false; };
-  }, []);
-
-  const dynamicStreams = useMemo(() => buildStreamCards(dbStreams, dbSubjects), [dbStreams, dbSubjects]);
-  const dynamicSubjectMap = useMemo(() => buildSubjectMap(dbStreams, dbSubjects), [dbStreams, dbSubjects]);
 
   const activeStreamData =
-    dynamicStreams.find((stream) => String(stream.id) === String(selectedStream)) || dynamicStreams[0] || streamConfig[0];
+    streamConfig.find((stream) => stream.id === selectedStream) || streamConfig[0];
 
-  const visibleSubjects = dynamicSubjectMap[selectedStream] || [];
+  const visibleSubjects = subjectConfig[selectedStream] || [];
 
   const closeRegisterModal = () => setShowRegisterModal(false);
 
@@ -644,7 +579,7 @@ export function SubjectsPage({
           </div>
 
           <div className="stream-grid subjects-stream-grid">
-            {dynamicStreams.map((stream) => (
+            {streamConfig.map((stream) => (
               <button
                 key={stream.id}
                 type="button"
@@ -672,8 +607,8 @@ export function SubjectsPage({
             </div>
 
             <div className="subject-card-grid">
-              {visibleSubjects.map((subject) => (
-                <article className="subject-card" key={subject.name}>
+              {visibleSubjects.map((subject, index) => (
+                <article className={`subject-card subject-tone-${index % 4}`} key={subject.name}>
                   <div className="subject-card-top">
                     <div className="subject-icon">{subject.icon}</div>
                     <span className="status-pill">Available</span>
@@ -687,19 +622,18 @@ export function SubjectsPage({
                     className="view-lessons-btn"
                     type="button"
                     onClick={() => {
-                      if (!token) {
-                        setShowRegisterModal(true);
+                      if (token && onSelectSubject) {
+                        onSelectSubject({
+                          id: subject.id || subject.name,
+                          name: subject.name,
+                          streamName: activeStreamData.title,
+                        });
                         return;
                       }
-                      onSelectSubject?.({
-                        id: subject.id,
-                        _id: subject.id,
-                        name: subject.name,
-                        streamName: activeStreamData.title,
-                      });
+                      setShowRegisterModal(true);
                     }}
                   >
-                    View Lessons
+                    {token ? "Open Subject" : "Register to View"}
                   </button>
                 </article>
               ))}

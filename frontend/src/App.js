@@ -111,6 +111,7 @@ function App() {
           onLoginClick={() => setScreen("login")}
           onRegisterClick={() => setScreen("choose-role")}
           onLogout={handleLogout}
+          onAboutClick={() => setScreen("about")}
           onSelectSubject={(subject) => {
             setSelectedSubject(subject);
             setScreen("subject-detail");
