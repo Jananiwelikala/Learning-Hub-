@@ -45,6 +45,53 @@ export async function register(userData) {
   }
 }
 
+
+
+export async function getCurrentUserProfile(token) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, user: data.user };
+    }
+
+    return { success: false, error: data.message || 'Failed to load profile' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
+export async function updateCurrentUserProfile(token, profileData) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/auth/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(profileData),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, user: data.user };
+    }
+
+    return { success: false, error: data.message || 'Failed to update profile' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 // Class Posts API functions
 export async function getTeacherPosts(token) {
   try {

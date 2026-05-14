@@ -6,6 +6,8 @@ import {
   deleteClassPost,
   submitPostForApproval,
   getTeacherComments,
+  getCurrentUserProfile,
+  updateCurrentUserProfile,
 } from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
@@ -23,9 +25,9 @@ const emptyPostForm = {
   title: "",
   description: "",
   subject: "",
-  type: "",
   grade: "",
-  district: "",
+  type: "",
+  location: "",
   schedule: "",
   duration: "",
   fee: "",
@@ -35,20 +37,47 @@ const emptyPostForm = {
   status: "draft",
 };
 
+const emptyProfile = {
+  name: "",
+  email: "",
+  phone: "",
+  subject: "",
+  teachingMode: "",
+  institute: "",
+  qualifications: "",
+  experience: "",
+  district: "",
+  bio: "",
+};
+
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem("user") || "null") || {};
+  } catch {
+    return {};
+  }
+}
+
+function getInitials(name = "") {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "T";
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+}
+
 function TeacherDashboard({ teacherName, onLogout }) {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [posts, setPosts] = useState([]);
   const [comments, setComments] = useState([]);
-  const [profile, setProfile] = useState({
-    name: teacherName || "",
-    email: "",
-    phone: "",
-    subject: "",
-    qualifications: "",
-    experience: "",
-    district: "",
-    bio: "",
-  });
+  const [profile, setProfile] = useState(() => ({
+    ...emptyProfile,
+    ...getStoredUser(),
+    name: getStoredUser().name || teacherName || "",
+  }));
+  const [profileForm, setProfileForm] = useState(() => ({
+    ...emptyProfile,
+    ...getStoredUser(),
+    name: getStoredUser().name || teacherName || "",
+  }));
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -56,6 +85,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
   const [editingPostId, setEditingPostId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingPost, setSavingPost] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -68,6 +98,14 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
     try {
       const token = localStorage.getItem("token");
+
+      const profileResult = await getCurrentUserProfile(token);
+      if (profileResult.success) {
+        const updatedProfile = { ...emptyProfile, ...profileResult.user };
+        setProfile(updatedProfile);
+        setProfileForm(updatedProfile);
+        localStorage.setItem("user", JSON.stringify(profileResult.user));
+      }
 
       const postsResult = await getTeacherPosts(token);
       if (postsResult.success) {
@@ -101,9 +139,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
   const recentActivities = useMemo(() => {
     return posts.slice(0, 4).map((post) => {
-      const icon =
-        post.status === "approved" ? "✅" : post.status === "pending" ? "⏳" : "📝";
-
+      const icon = post.status === "approved" ? "✅" : post.status === "pending" ? "⏳" : "📝";
       const message =
         post.status === "approved"
           ? `"${post.title}" approved`
@@ -124,10 +160,9 @@ function TeacherDashboard({ teacherName, onLogout }) {
     const query = searchTerm.trim().toLowerCase();
 
     return posts.filter((post) => {
-      const text = `${post.title} ${post.description} ${post.subject} ${post.district}`.toLowerCase();
+      const text = `${post.title} ${post.description} ${post.subject} ${post.location} ${post.grade}`.toLowerCase();
       const matchesText = !query || text.includes(query);
       const matchesStatus = filterStatus === "all" || post.status === filterStatus;
-
       return matchesText && matchesStatus;
     });
   }, [posts, searchTerm, filterStatus]);
@@ -136,94 +171,60 @@ function TeacherDashboard({ teacherName, onLogout }) {
     setFormState((prev) => ({ ...prev, [key]: value }));
   }
 
+  function handleProfileChange(key, value) {
+    setProfileForm((prev) => ({ ...prev, [key]: value }));
+  }
+
   function resetForm() {
     setFormState(emptyPostForm);
     setEditingPostId(null);
   }
 
-  function splitLocation(location = "") {
-    const [typePart, ...districtParts] = location.split(" - ");
-    const type = ["Online", "Physical", "Both"].includes(typePart) ? typePart : "";
-    const district = type ? districtParts.join(" - ") : location;
-
-    return {
-      type,
-      district,
-    };
-  }
-
   function startEditPost(post) {
-    const { type, district } = splitLocation(post.location || post.district || "");
-
+    setEditingPostId(post._id);
     setFormState({
       title: post.title || "",
       description: post.description || "",
       subject: post.subject || "",
-      type: post.type || type || "",
       grade: post.grade || "",
-      district: post.district || district || "",
+      type: post.type || "",
+      location: post.location || "",
       schedule: post.schedule || "",
       duration: post.duration || "",
-      fee: post.fee ?? "",
+      fee: post.fee || "",
       contactInfo: post.contactInfo || "",
       image: null,
       imagePreview: post.image || null,
       status: post.status || "draft",
     });
-
-    setEditingPostId(post._id);
     setActiveSection("create");
   }
 
   function handleImageChange(event) {
     const file = event.target.files?.[0];
-
     if (!file) return;
 
     const reader = new FileReader();
-
     reader.onloadend = () => {
-      setFormState((prev) => ({
-        ...prev,
-        image: file,
-        imagePreview: reader.result,
-      }));
+      setFormState((prev) => ({ ...prev, image: file, imagePreview: reader.result }));
     };
-
     reader.readAsDataURL(file);
   }
 
   async function savePost(status = "draft") {
-    if (
-      !formState.title ||
-      !formState.description ||
-      !formState.subject ||
-      !formState.type ||
-      !formState.grade ||
-      !formState.district ||
-      !formState.schedule ||
-      !formState.duration ||
-      !formState.contactInfo
-    ) {
+    const requiredFields = ["title", "description", "subject", "grade", "location", "schedule", "duration", "fee", "contactInfo"];
+    const hasMissingFields = requiredFields.some((field) => !String(formState[field] || "").trim());
+
+    if (hasMissingFields) {
       alert("Please fill all required fields before saving.");
       return;
     }
 
     setSavingPost(true);
-
     const token = localStorage.getItem("token");
     const payload = {
-      title: formState.title.trim(),
-      description: formState.description.trim(),
-      subject: formState.subject,
-      grade: formState.grade.trim(),
-      location: formState.type === "Online"
-        ? `Online - ${formState.district.trim()}`
-        : `${formState.type} - ${formState.district.trim()}`,
-      schedule: formState.schedule.trim(),
-      duration: formState.duration.trim(),
+      ...formState,
       fee: Number(formState.fee || 0),
-      contactInfo: formState.contactInfo.trim(),
       status,
     };
 
@@ -236,7 +237,6 @@ function TeacherDashboard({ teacherName, onLogout }) {
         await loadTeacherData();
         resetForm();
         setActiveSection("posts");
-
         alert(
           editingPostId
             ? "Post updated successfully."
@@ -254,9 +254,33 @@ function TeacherDashboard({ teacherName, onLogout }) {
     }
   }
 
+  async function saveProfile(event) {
+    event.preventDefault();
+    if (!profileForm.name.trim()) {
+      alert("Name is required.");
+      return;
+    }
+
+    setSavingProfile(true);
+    const token = localStorage.getItem("token");
+    const result = await updateCurrentUserProfile(token, profileForm);
+
+    if (result.success) {
+      const updatedProfile = { ...emptyProfile, ...result.user };
+      setProfile(updatedProfile);
+      setProfileForm(updatedProfile);
+      localStorage.setItem("user", JSON.stringify(result.user));
+      alert("Profile updated successfully.");
+      setActiveSection("dashboard");
+    } else {
+      alert("Error: " + result.error);
+    }
+
+    setSavingProfile(false);
+  }
+
   async function removePost(id) {
     const confirmed = window.confirm("Are you sure you want to delete this class post?");
-
     if (!confirmed) return;
 
     const token = localStorage.getItem("token");
@@ -285,6 +309,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
   function getStatusLabel(status) {
     if (status === "approved") return "Approved";
     if (status === "pending") return "Pending";
+    if (status === "rejected") return "Rejected";
     return "Draft";
   }
 
@@ -292,19 +317,15 @@ function TeacherDashboard({ teacherName, onLogout }) {
     return (
       <>
         <section className="teacher-hero-card">
-          <div>
-            <p className="teacher-greeting">Good Afternoon, {teacherName || "Teacher"}!</p>
+          <div className="teacher-hero-copy">
+            <p className="teacher-greeting">Good Afternoon, {profile.name || teacherName || "Teacher"}!</p>
             <h1>Manage your A/L class posts with ease.</h1>
             <p>
-              Create class advertisements, submit them for approval, and connect with
-              students looking for trusted A/L teachers.
+              Create class advertisements, submit them for approval, and connect with students looking for trusted A/L teachers.
             </p>
-            <p className="teacher-hero-sinhala">
-              ඔබගේ පන්ති දැන්වීම් පහසුවෙන් කළමනාකරණය කර සිසුන් වෙත ළඟා වන්න.
-            </p>
-
+            <p className="teacher-hero-sinhala">ඔබගේ පන්ති දැන්වීම් පහසුවෙන් කළමනාකරණය කර සිසුන් වෙත ළඟා වන්න.</p>
             <div className="teacher-hero-actions">
-              <button className="teacher-btn teacher-btn-primary" onClick={() => setActiveSection("create")}>
+              <button className="teacher-btn teacher-btn-primary" onClick={() => { resetForm(); setActiveSection("create"); }}>
                 Create Class Post
               </button>
               <button className="teacher-btn teacher-btn-outline" onClick={() => setActiveSection("posts")}>
@@ -313,67 +334,37 @@ function TeacherDashboard({ teacherName, onLogout }) {
             </div>
           </div>
 
-          <div className="teacher-hero-count">
-            <strong>{stats.approvedPosts}</strong>
-            <span>Approved Posts</span>
+          <div className="teacher-hero-visual" aria-hidden="true">
+            <div className="teacher-visual-blob"></div>
+            <div className="teacher-visual-screen">📚</div>
+            <div className="teacher-visual-card">A/L Class Updates</div>
           </div>
         </section>
 
         <section className="teacher-stats-grid">
-          <div className="teacher-stat-card">
-            <span>📢</span>
-            <strong>{stats.totalPosts}</strong>
-            <p>Total Posts</p>
-          </div>
-
-          <div className="teacher-stat-card">
-            <span>✅</span>
-            <strong>{stats.approvedPosts}</strong>
-            <p>Approved</p>
-          </div>
-
-          <div className="teacher-stat-card">
-            <span>⏳</span>
-            <strong>{stats.pendingPosts}</strong>
-            <p>Pending</p>
-          </div>
-
-          <div className="teacher-stat-card">
-            <span>📝</span>
-            <strong>{stats.draftPosts}</strong>
-            <p>Drafts</p>
-          </div>
+          <div className="teacher-stat-card"><span>📢</span><strong>{stats.totalPosts}</strong><p>Total Posts</p></div>
+          <div className="teacher-stat-card"><span>✅</span><strong>{stats.approvedPosts}</strong><p>Approved</p></div>
+          <div className="teacher-stat-card"><span>⏳</span><strong>{stats.pendingPosts}</strong><p>Pending</p></div>
+          <div className="teacher-stat-card"><span>📝</span><strong>{stats.draftPosts}</strong><p>Drafts</p></div>
         </section>
 
         <section className="teacher-dashboard-grid">
-          <div className="teacher-panel">
+          <div className="teacher-panel teacher-profile-summary-card">
             <div className="teacher-panel-header">
               <div>
                 <p className="teacher-label">Profile Summary</p>
                 <h2>Teacher Details</h2>
               </div>
-              <button className="teacher-small-btn" onClick={() => setActiveSection("profile")}>
-                Edit
-              </button>
+              <button className="teacher-small-btn" onClick={() => setActiveSection("profile")}>Edit</button>
             </div>
 
             <div className="teacher-info-grid">
-              <div>
-                <span>Name</span>
-                <strong>{profile.name || "Not added"}</strong>
-              </div>
-              <div>
-                <span>Subject</span>
-                <strong>{profile.subject || "Not selected"}</strong>
-              </div>
-              <div>
-                <span>Phone</span>
-                <strong>{profile.phone || "Not added"}</strong>
-              </div>
-              <div>
-                <span>District</span>
-                <strong>{profile.district || "Not added"}</strong>
-              </div>
+              <div><span>Name</span><strong>{profile.name || "Not added"}</strong></div>
+              <div><span>Subject</span><strong>{profile.subject || "Not selected"}</strong></div>
+              <div><span>Phone</span><strong>{profile.phone || "Not added"}</strong></div>
+              <div><span>Teaching Mode</span><strong>{profile.teachingMode || "Not selected"}</strong></div>
+              <div><span>Institute</span><strong>{profile.institute || "Not added"}</strong></div>
+              <div><span>District</span><strong>{profile.district || "Not added"}</strong></div>
             </div>
           </div>
 
@@ -392,10 +383,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
                 recentActivities.map((activity) => (
                   <div key={activity.id} className="teacher-activity-item">
                     <span>{activity.icon}</span>
-                    <div>
-                      <strong>{activity.message}</strong>
-                      <p>{activity.time}</p>
-                    </div>
+                    <div><strong>{activity.message}</strong><p>{activity.time}</p></div>
                   </div>
                 ))
               )}
@@ -416,13 +404,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
             <p>Search, filter, submit, or delete your class advertisements.</p>
           </div>
 
-          <button
-            className="teacher-btn teacher-btn-primary"
-            onClick={() => {
-              resetForm();
-              setActiveSection("create");
-            }}
-          >
+          <button className="teacher-btn teacher-btn-primary" onClick={() => { resetForm(); setActiveSection("create"); }}>
             Create New Post
           </button>
         </div>
@@ -434,91 +416,40 @@ function TeacherDashboard({ teacherName, onLogout }) {
         ) : (
           <>
             <div className="teacher-toolbar">
-              <input
-                type="search"
-                placeholder="Search by title, subject, or district..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
-
-              <select
-                value={filterStatus}
-                onChange={(event) => setFilterStatus(event.target.value)}
-              >
+              <input type="search" placeholder="Search by title, subject, or location..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
+              <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>
                 <option value="all">All statuses</option>
                 <option value="approved">Approved</option>
                 <option value="pending">Pending</option>
                 <option value="draft">Drafts</option>
+                <option value="rejected">Rejected</option>
               </select>
             </div>
 
             {filteredPosts.length === 0 ? (
-              <EmptyState
-                icon="📢"
-                title="No class posts found"
-                message="Create your first class advertisement to reach students."
-                actionText="Create Post"
-                onAction={() => setActiveSection("create")}
-              />
+              <EmptyState icon="📢" title="No class posts found" message="Create your first class advertisement to reach students." actionText="Create Post" onAction={() => { resetForm(); setActiveSection("create"); }} />
             ) : (
               <div className="teacher-posts-grid">
                 {filteredPosts.map((post) => {
                   const postComments = comments.filter((comment) => comment.post?._id === post._id);
-
                   return (
                     <article key={post._id} className="teacher-post-card">
-                      {post.image && (
-                        <div className="teacher-post-image">
-                          <img src={post.image} alt={post.title} />
-                        </div>
-                      )}
+                      {post.image && <div className="teacher-post-image"><img src={post.image} alt={post.title} /></div>}
 
                       <div className="teacher-post-content">
                         <div className="teacher-post-header">
                           <h3>{post.title}</h3>
-                          <span className={`teacher-status ${post.status}`}>
-                            {getStatusLabel(post.status)}
-                          </span>
+                          <span className={`teacher-status ${post.status}`}>{getStatusLabel(post.status)}</span>
                         </div>
-
-                        <p className="teacher-post-subject">
-                          {post.subject} • {post.grade || "Grade not added"}
-                        </p>
-                        <p className="teacher-post-location">
-                          📍 {post.location || post.district || "Location not added"}
-                        </p>
-                        <p className="teacher-post-location">
-                          🗓️ {post.schedule || "Schedule not added"} • ⏱️ {post.duration || "Duration not added"}
-                        </p>
-
-                        <p className="teacher-post-description">
-                          {post.description?.length > 120
-                            ? `${post.description.substring(0, 120)}...`
-                            : post.description}
-                        </p>
-
-                        <div className="teacher-post-meta">
-                          <span>Rs. {post.fee || "Not added"}</span>
-                          <span>💬 {postComments.length}</span>
-                          <span>👁️ {post.views || 0}</span>
-                        </div>
-
+                        <p className="teacher-post-subject">{post.subject} • {post.grade || "A/L"}</p>
+                        <p className="teacher-post-location">📍 {post.location || "Location not added"}</p>
+                        <p className="teacher-post-location">🗓️ {post.schedule || "Schedule not added"} • {post.duration || "Duration not added"}</p>
+                        <p className="teacher-post-description">{post.description?.length > 120 ? `${post.description.substring(0, 120)}...` : post.description}</p>
+                        <div className="teacher-post-meta"><span>Rs. {post.fee || "Not added"}</span><span>💬 {postComments.length}</span><span>👁️ {post.views || 0}</span></div>
                         <div className="teacher-post-actions">
-                          {post.status === "draft" && (
-                            <button onClick={() => submitForApproval(post._id)}>
-                              Submit
-                            </button>
-                          )}
-
-                          {post.status !== "approved" && (
-                            <button onClick={() => startEditPost(post)}>
-                              Edit
-                            </button>
-                          )}
-
-                          <button className="danger" onClick={() => removePost(post._id)}>
-                            Delete
-                          </button>
+                          {post.status === "draft" && <button onClick={() => submitForApproval(post._id)}>Submit for Approval</button>}
+                          {post.status !== "approved" && <button onClick={() => startEditPost(post)}>Edit</button>}
+                          <button className="danger" onClick={() => removePost(post._id)}>Delete</button>
                         </div>
                       </div>
                     </article>
@@ -534,176 +465,36 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
   function renderCreatePost() {
     return (
-      <section className="teacher-panel">
+      <section className="teacher-panel teacher-form-panel">
         <div className="teacher-panel-header">
           <div>
-            <p className="teacher-label">{editingPostId ? "Edit Advertisement" : "Create Advertisement"}</p>
+            <p className="teacher-label">{editingPostId ? "Update Advertisement" : "Create Advertisement"}</p>
             <h2>{editingPostId ? "Edit Class Post" : "Create Class Post"}</h2>
             <p>Share your class details clearly so students can contact you easily.</p>
           </div>
+          {editingPostId && <button className="teacher-small-btn muted" onClick={resetForm}>Cancel Edit</button>}
         </div>
 
         <div className="teacher-form">
           <div className="teacher-form-grid">
-            <label>
-              Post Title *
-              <input
-                type="text"
-                value={formState.title}
-                onChange={(event) => handleFormChange("title", event.target.value)}
-                placeholder="Example: 2026 A/L Physics Revision Class"
-              />
-            </label>
-
-            <label>
-              Subject *
-              <select
-                value={formState.subject}
-                onChange={(event) => handleFormChange("subject", event.target.value)}
-              >
-                <option value="">Select subject</option>
-                <option value="Physics">Physics</option>
-                <option value="Chemistry">Chemistry</option>
-                <option value="Biology">Biology</option>
-                <option value="Combined Maths">Combined Maths</option>
-                <option value="Accounting">Accounting</option>
-                <option value="Economics">Economics</option>
-                <option value="Business Studies">Business Studies</option>
-                <option value="ICT">ICT</option>
-              </select>
-            </label>
-
-            <label>
-              Class Type *
-              <select
-                value={formState.type}
-                onChange={(event) => handleFormChange("type", event.target.value)}
-              >
-                <option value="">Select type</option>
-                <option value="Online">Online</option>
-                <option value="Physical">Physical</option>
-                <option value="Both">Both</option>
-              </select>
-            </label>
-
-            <label>
-              Grade / Exam Year *
-              <input
-                type="text"
-                value={formState.grade}
-                onChange={(event) => handleFormChange("grade", event.target.value)}
-                placeholder="Example: 2026 A/L, 2027 A/L"
-              />
-            </label>
-
-            <label>
-              District / City *
-              <input
-                type="text"
-                value={formState.district}
-                onChange={(event) => handleFormChange("district", event.target.value)}
-                placeholder="Example: Colombo, Gampaha, Kandy"
-              />
-            </label>
-
-            <label>
-              Schedule *
-              <input
-                type="text"
-                value={formState.schedule}
-                onChange={(event) => handleFormChange("schedule", event.target.value)}
-                placeholder="Example: Sunday 8.00 AM - 10.00 AM"
-              />
-            </label>
-
-            <label>
-              Duration *
-              <input
-                type="text"
-                value={formState.duration}
-                onChange={(event) => handleFormChange("duration", event.target.value)}
-                placeholder="Example: 2 hours / 6 months course"
-              />
-            </label>
-
-            <label>
-              Monthly Fee (Rs.)
-              <input
-                type="number"
-                min="0"
-                value={formState.fee}
-                onChange={(event) => handleFormChange("fee", event.target.value)}
-                placeholder="Example: 2500"
-              />
-            </label>
-
-            <label>
-              Contact Information *
-              <input
-                type="tel"
-                value={formState.contactInfo}
-                onChange={(event) => handleFormChange("contactInfo", event.target.value)}
-                placeholder="Phone / WhatsApp number"
-              />
-            </label>
+            <label>Post Title *<input type="text" value={formState.title} onChange={(event) => handleFormChange("title", event.target.value)} placeholder="Example: 2026 A/L Physics Revision Class" /></label>
+            <label>Subject *<select value={formState.subject} onChange={(event) => handleFormChange("subject", event.target.value)}><option value="">Select subject</option><option value="Physics">Physics</option><option value="Chemistry">Chemistry</option><option value="Biology">Biology</option><option value="Combined Maths">Combined Maths</option><option value="Accounting">Accounting</option><option value="Economics">Economics</option><option value="Business Studies">Business Studies</option><option value="ICT">ICT</option></select></label>
+            <label>Grade / Exam Year *<input type="text" value={formState.grade} onChange={(event) => handleFormChange("grade", event.target.value)} placeholder="Example: 2026 A/L" /></label>
+            <label>Class Type<select value={formState.type} onChange={(event) => handleFormChange("type", event.target.value)}><option value="">Select type</option><option value="Online">Online</option><option value="Physical">Physical</option><option value="Both">Both</option></select></label>
+            <label>Location *<input type="text" value={formState.location} onChange={(event) => handleFormChange("location", event.target.value)} placeholder="Example: Online via Zoom / Colombo" /></label>
+            <label>Schedule *<input type="text" value={formState.schedule} onChange={(event) => handleFormChange("schedule", event.target.value)} placeholder="Example: Every Sunday, 7.00 PM" /></label>
+            <label>Duration *<input type="text" value={formState.duration} onChange={(event) => handleFormChange("duration", event.target.value)} placeholder="Example: 2 hours" /></label>
+            <label>Monthly Fee (Rs.) *<input type="number" min="0" value={formState.fee} onChange={(event) => handleFormChange("fee", event.target.value)} placeholder="2500" /></label>
+            <label className="full-width">Contact Info *<input type="text" value={formState.contactInfo} onChange={(event) => handleFormChange("contactInfo", event.target.value)} placeholder="WhatsApp: 071 234 5678" /></label>
+            <label className="full-width">Post Image<input type="file" accept="image/*" onChange={handleImageChange} /></label>
+            {formState.imagePreview && <div className="teacher-image-preview full-width"><img src={formState.imagePreview} alt="Preview" /></div>}
+            <label className="full-width">Description *<textarea rows="5" value={formState.description} onChange={(event) => handleFormChange("description", event.target.value)} placeholder="Describe your class content, revision plan, and student benefits." /></label>
           </div>
 
-          <label>
-            Description *
-            <textarea
-              value={formState.description}
-              onChange={(event) => handleFormChange("description", event.target.value)}
-              placeholder="Describe your class schedule, teaching method, target students, and what students will learn..."
-              rows={5}
-            />
-          </label>
-
-          <label>
-            Post Image
-            {formState.imagePreview && (
-              <div className="teacher-image-preview">
-                <img src={formState.imagePreview} alt="Preview" />
-              </div>
-            )}
-            <input type="file" accept="image/*" onChange={handleImageChange} />
-          </label>
-
           <div className="teacher-form-actions">
-            <button
-              className="teacher-btn teacher-btn-outline"
-              onClick={resetForm}
-              disabled={savingPost}
-            >
-              Cancel
-            </button>
-
-            {editingPostId ? (
-              <button
-                className="teacher-btn teacher-btn-primary"
-                onClick={() => savePost(formState.status)}
-                disabled={savingPost}
-              >
-                {savingPost ? "Updating..." : "Update Post"}
-              </button>
-            ) : (
-              <>
-                <button
-                  className="teacher-btn teacher-btn-outline"
-                  onClick={() => savePost("draft")}
-                  disabled={savingPost}
-                >
-                  {savingPost ? "Saving..." : "Save as Draft"}
-                </button>
-
-                <button
-                  className="teacher-btn teacher-btn-primary"
-                  onClick={() => savePost("pending")}
-                  disabled={savingPost}
-                >
-                  {savingPost ? "Submitting..." : "Submit for Approval"}
-                </button>
-              </>
-            )}
+            <button className="teacher-btn teacher-btn-outline" type="button" onClick={resetForm}>Clear</button>
+            {!editingPostId && <button className="teacher-btn teacher-btn-soft" type="button" disabled={savingPost} onClick={() => savePost("draft")}>{savingPost ? "Saving..." : "Save Draft"}</button>}
+            <button className="teacher-btn teacher-btn-primary" type="button" disabled={savingPost} onClick={() => savePost(editingPostId ? formState.status : "pending")}>{savingPost ? "Saving..." : editingPostId ? "Update Post" : "Submit for Approval"}</button>
           </div>
         </div>
       </section>
@@ -712,183 +503,85 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
   function renderProfile() {
     return (
-      <section className="teacher-panel">
+      <section className="teacher-panel teacher-form-panel">
         <div className="teacher-panel-header">
           <div>
-            <p className="teacher-label">Teacher Profile</p>
-            <h2>My Profile</h2>
-            <p>Update your teacher information shown to students.</p>
+            <p className="teacher-label">Account Details</p>
+            <h2>Teacher Profile</h2>
+            <p>Update your teacher details shown in the dashboard and class post area.</p>
           </div>
         </div>
 
-        <div className="teacher-form">
+        <form className="teacher-form" onSubmit={saveProfile}>
           <div className="teacher-form-grid">
-            <label>
-              Full Name
-              <input
-                type="text"
-                value={profile.name}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, name: event.target.value }))
-                }
-              />
-            </label>
-
-            <label>
-              Email
-              <input
-                type="email"
-                value={profile.email}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, email: event.target.value }))
-                }
-              />
-            </label>
-
-            <label>
-              Phone
-              <input
-                type="tel"
-                value={profile.phone}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, phone: event.target.value }))
-                }
-              />
-            </label>
-
-            <label>
-              Main Subject
-              <select
-                value={profile.subject}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, subject: event.target.value }))
-                }
-              >
-                <option value="">Select subject</option>
-                <option value="Physics">Physics</option>
-                <option value="Chemistry">Chemistry</option>
-                <option value="Biology">Biology</option>
-                <option value="Combined Maths">Combined Maths</option>
-                <option value="Accounting">Accounting</option>
-                <option value="Economics">Economics</option>
-                <option value="Business Studies">Business Studies</option>
-              </select>
-            </label>
-
-            <label>
-              Qualifications
-              <input
-                type="text"
-                value={profile.qualifications}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, qualifications: event.target.value }))
-                }
-                placeholder="Example: BSc, MSc, Diploma..."
-              />
-            </label>
-
-            <label>
-              Years of Experience
-              <input
-                type="number"
-                value={profile.experience}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, experience: event.target.value }))
-                }
-              />
-            </label>
-
-            <label>
-              District
-              <input
-                type="text"
-                value={profile.district}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, district: event.target.value }))
-                }
-              />
-            </label>
+            <label>Full Name *<input type="text" value={profileForm.name} onChange={(event) => handleProfileChange("name", event.target.value)} /></label>
+            <label>Email Address<input type="email" value={profileForm.email} disabled /></label>
+            <label>Phone<input type="tel" value={profileForm.phone} onChange={(event) => handleProfileChange("phone", event.target.value)} placeholder="07XXXXXXXX" /></label>
+            <label>Main Subject<select value={profileForm.subject} onChange={(event) => handleProfileChange("subject", event.target.value)}><option value="">Choose subject</option><option value="Combined Maths">Combined Maths</option><option value="Biology">Biology</option><option value="Physics">Physics</option><option value="Chemistry">Chemistry</option><option value="Accounting">Accounting</option><option value="Economics">Economics</option><option value="ICT">ICT</option><option value="Business Studies">Business Studies</option></select></label>
+            <label>Teaching Mode<select value={profileForm.teachingMode} onChange={(event) => handleProfileChange("teachingMode", event.target.value)}><option value="">Choose mode</option><option value="Online">Online</option><option value="Physical">Physical</option><option value="Both">Both</option></select></label>
+            <label>Institute / Class Name<input type="text" value={profileForm.institute} onChange={(event) => handleProfileChange("institute", event.target.value)} placeholder="Where do you teach?" /></label>
+            <label>District<input type="text" value={profileForm.district} onChange={(event) => handleProfileChange("district", event.target.value)} placeholder="Example: Colombo" /></label>
+            <label>Experience<input type="text" value={profileForm.experience} onChange={(event) => handleProfileChange("experience", event.target.value)} placeholder="Example: 5 years" /></label>
+            <label className="full-width">Qualifications<input type="text" value={profileForm.qualifications} onChange={(event) => handleProfileChange("qualifications", event.target.value)} placeholder="Example: BSc, MSc, A/L Tutor" /></label>
+            <label className="full-width">Bio<textarea rows="4" value={profileForm.bio} onChange={(event) => handleProfileChange("bio", event.target.value)} placeholder="Short introduction about your teaching approach." /></label>
           </div>
-
-          <label>
-            Bio
-            <textarea
-              value={profile.bio}
-              onChange={(event) =>
-                setProfile((prev) => ({ ...prev, bio: event.target.value }))
-              }
-              rows={4}
-              placeholder="Write a short description about your teaching experience..."
-            />
-          </label>
 
           <div className="teacher-form-actions">
-            <button className="teacher-btn teacher-btn-primary" onClick={() => alert("Profile saved locally.")}>
-              Save Profile
-            </button>
+            <button className="teacher-btn teacher-btn-outline" type="button" onClick={() => setProfileForm(profile)}>Reset</button>
+            <button className="teacher-btn teacher-btn-primary" type="submit" disabled={savingProfile}>{savingProfile ? "Saving..." : "Update Profile"}</button>
           </div>
-        </div>
+        </form>
       </section>
     );
   }
 
-  function renderSectionContent() {
-    if (activeSection === "dashboard") return renderDashboard();
+  function renderActiveSection() {
     if (activeSection === "posts") return renderPosts();
     if (activeSection === "create") return renderCreatePost();
     if (activeSection === "profile") return renderProfile();
-
-    return null;
+    return renderDashboard();
   }
 
   return (
     <div className="teacher-dashboard-wrapper">
       <header className="teacher-topbar">
         <div className="teacher-brand">
-          <span className="teacher-logo">
-            <img src="/logo1.png" alt="Learning Hub logo" />
-          </span>
-          <div>
-            <strong>Learning Hub</strong>
-            <small>A/L Platform</small>
-          </div>
+          <span className="teacher-logo"><img src="/logo1.png" alt="Learning Hub" /></span>
+          <div><strong>Learning Hub</strong><small>Teacher Workspace</small></div>
         </div>
 
         <nav className="teacher-nav">
           {menuItems.map((item) => (
-            <button
-              key={item.id}
-              className={activeSection === item.id ? "active" : ""}
-              onClick={() => setActiveSection(item.id)}
-            >
+            <button key={item.id} className={activeSection === item.id ? "active" : ""} onClick={() => { if (item.id === "create") resetForm(); setActiveSection(item.id); }}>
               {item.label}
             </button>
           ))}
         </nav>
 
         <div className="teacher-user-area">
-          <button className="teacher-bell">
-            🔔
-            {stats.pendingPosts > 0 && <span>{stats.pendingPosts}</span>}
+          <button className="teacher-bell" title="Pending posts"><span>{stats.pendingPosts}</span>🔔</button>
+          <button className="teacher-profile-pill" onClick={() => setActiveSection("profile")}>
+            <span className="teacher-avatar">{getInitials(profile.name || teacherName)}</span>
+            <span><strong>{profile.name || teacherName || "Teacher"}</strong><small>{profile.subject || "Teacher"}</small></span>
           </button>
-
-          <div className="teacher-profile-pill">
-            <div className="teacher-avatar">
-              {(teacherName || "T").charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <strong>{teacherName || "Teacher"}</strong>
-              <small>Teacher Account</small>
-            </div>
-          </div>
-
-          <button className="teacher-logout" onClick={onLogout}>
-            Logout
-          </button>
+          <button className="teacher-logout" onClick={onLogout}>Logout</button>
         </div>
       </header>
 
-      <main className="teacher-content">{renderSectionContent()}</main>
+      <main className="teacher-content">{renderActiveSection()}</main>
+
+      <footer className="teacher-footer">
+        <div>
+          <strong>Learning Hub</strong>
+          <p>AI-powered learning platform for G.C.E. Advanced Level students in Sri Lanka.</p>
+        </div>
+        <div className="teacher-footer-links">
+          <button onClick={() => setActiveSection("dashboard")}>Home</button>
+          <button onClick={() => setActiveSection("posts")}>Class Posts</button>
+          <button onClick={() => setActiveSection("profile")}>Profile</button>
+        </div>
+        <span>© 2026 Learning Hub. All rights reserved.</span>
+      </footer>
     </div>
   );
 }
