@@ -12,6 +12,7 @@ const classPostSchema = new mongoose.Schema(
     duration: { type: String, required: true, trim: true },
     fee: { type: Number, required: true, min: 0 },
     contactInfo: { type: String, required: true, trim: true },
+    image: { type: String, trim: true, default: "" },
     teacher: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

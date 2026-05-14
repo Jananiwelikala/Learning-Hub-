@@ -66,6 +66,7 @@ function getInitials(name = "") {
 
 function TeacherDashboard({ teacherName, onLogout }) {
   const [activeSection, setActiveSection] = useState("dashboard");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [posts, setPosts] = useState([]);
   const [comments, setComments] = useState([]);
   const [profile, setProfile] = useState(() => ({
@@ -224,6 +225,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
     const token = localStorage.getItem("token");
     const payload = {
       ...formState,
+      image: formState.imagePreview || "",
       fee: Number(formState.fee || 0),
       status,
     };
@@ -434,7 +436,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
                   const postComments = comments.filter((comment) => comment.post?._id === post._id);
                   return (
                     <article key={post._id} className="teacher-post-card">
-                      {post.image && <div className="teacher-post-image"><img src={post.image} alt={post.title} /></div>}
+                      {(post.image || post.imagePreview) && <div className="teacher-post-image"><img src={post.image || post.imagePreview} alt={post.title} /></div>}
 
                       <div className="teacher-post-content">
                         <div className="teacher-post-header">
@@ -476,7 +478,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
         </div>
 
         <div className="teacher-form">
-          <div className="teacher-form-grid">
+          <div className="teacher-form-grid teacher-form-grid-wide">
             <label>Post Title *<input type="text" value={formState.title} onChange={(event) => handleFormChange("title", event.target.value)} placeholder="Example: 2026 A/L Physics Revision Class" /></label>
             <label>Subject *<select value={formState.subject} onChange={(event) => handleFormChange("subject", event.target.value)}><option value="">Select subject</option><option value="Physics">Physics</option><option value="Chemistry">Chemistry</option><option value="Biology">Biology</option><option value="Combined Maths">Combined Maths</option><option value="Accounting">Accounting</option><option value="Economics">Economics</option><option value="Business Studies">Business Studies</option><option value="ICT">ICT</option></select></label>
             <label>Grade / Exam Year *<input type="text" value={formState.grade} onChange={(event) => handleFormChange("grade", event.target.value)} placeholder="Example: 2026 A/L" /></label>
@@ -513,7 +515,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
         </div>
 
         <form className="teacher-form" onSubmit={saveProfile}>
-          <div className="teacher-form-grid">
+          <div className="teacher-form-grid teacher-form-grid-wide">
             <label>Full Name *<input type="text" value={profileForm.name} onChange={(event) => handleProfileChange("name", event.target.value)} /></label>
             <label>Email Address<input type="email" value={profileForm.email} disabled /></label>
             <label>Phone<input type="tel" value={profileForm.phone} onChange={(event) => handleProfileChange("phone", event.target.value)} placeholder="07XXXXXXXX" /></label>
@@ -559,28 +561,65 @@ function TeacherDashboard({ teacherName, onLogout }) {
         </nav>
 
         <div className="teacher-user-area">
-          <button className="teacher-bell" title="Pending posts"><span>{stats.pendingPosts}</span>🔔</button>
-          <button className="teacher-profile-pill" onClick={() => setActiveSection("profile")}>
-            <span className="teacher-avatar">{getInitials(profile.name || teacherName)}</span>
-            <span><strong>{profile.name || teacherName || "Teacher"}</strong><small>{profile.subject || "Teacher"}</small></span>
+          <button className="teacher-notification" title="Pending posts" onClick={() => setActiveSection("posts")}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 17H9m9-1.8V11a6 6 0 0 0-4.5-5.8V4a1.5 1.5 0 0 0-3 0v1.2A6 6 0 0 0 6 11v4.2L4.8 17h14.4L18 15.2Z" />
+              <path d="M10 20a2 2 0 0 0 4 0" />
+            </svg>
+            {stats.pendingPosts > 0 && <span>{stats.pendingPosts}</span>}
           </button>
-          <button className="teacher-logout" onClick={onLogout}>Logout</button>
+
+          <div className="teacher-profile-menu-wrap">
+            <button className="teacher-profile-pill" onClick={() => setProfileMenuOpen((open) => !open)}>
+              <span className="teacher-avatar">{getInitials(profile.name || teacherName)}</span>
+              <span><strong>{profile.name || teacherName || "Teacher"}</strong><small>{profile.subject || "Teacher"}</small></span>
+              <span className="teacher-profile-arrow">⌄</span>
+            </button>
+
+            {profileMenuOpen && (
+              <div className="teacher-profile-dropdown">
+                <button onClick={() => { setActiveSection("profile"); setProfileMenuOpen(false); }}>View Profile</button>
+                <button className="logout-option" onClick={onLogout}>Logout</button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="teacher-content">{renderActiveSection()}</main>
 
       <footer className="teacher-footer">
-        <div>
-          <strong>Learning Hub</strong>
-          <p>AI-powered learning platform for G.C.E. Advanced Level students in Sri Lanka.</p>
+        <div className="teacher-footer-inner">
+          <div className="teacher-footer-brand-block">
+            <div className="teacher-footer-logo-row">
+              <img src="/logo1.png" alt="Learning Hub" />
+              <strong>Learning Hub</strong>
+            </div>
+            <p>AI-powered learning platform for G.C.E. Advanced Level students in Sri Lanka.</p>
+            <span className="teacher-footer-sinhala">අදම A/L ගමන ආරම්භ කරන්න</span>
+          </div>
+
+          <div className="teacher-footer-col">
+            <h4>Quick Links</h4>
+            <button onClick={() => setActiveSection("dashboard")}>Home</button>
+            <button onClick={() => setActiveSection("posts")}>Class Posts</button>
+            <button onClick={() => setActiveSection("profile")}>Profile</button>
+          </div>
+
+          <div className="teacher-footer-col">
+            <h4>Teacher Tools</h4>
+            <button onClick={() => { resetForm(); setActiveSection("create"); }}>Create Post</button>
+            <button onClick={() => setActiveSection("posts")}>Approvals</button>
+            <button onClick={() => setActiveSection("profile")}>Account</button>
+          </div>
+
+          <div className="teacher-footer-col">
+            <h4>Contact</h4>
+            <p>info@learninghub.lk</p>
+            <p>+94 11 234 5678</p>
+          </div>
         </div>
-        <div className="teacher-footer-links">
-          <button onClick={() => setActiveSection("dashboard")}>Home</button>
-          <button onClick={() => setActiveSection("posts")}>Class Posts</button>
-          <button onClick={() => setActiveSection("profile")}>Profile</button>
-        </div>
-        <span>© 2026 Learning Hub. All rights reserved.</span>
+        <div className="teacher-footer-bottom">© 2026 Learning Hub. All rights reserved.</div>
       </footer>
     </div>
   );
