@@ -17,7 +17,7 @@ function buildClassPostPayload(body) {
     duration,
     fee,
     contactInfo,
-    status = "draft",
+    status = "pending",
     type,
     district,
   } = body;

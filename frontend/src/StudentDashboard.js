@@ -166,6 +166,15 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     loadClassPosts(searchFilters);
   }, [searchFilters]);
 
+  // Periodic refresh for class posts to show newly approved posts
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadClassPosts(searchFilters);
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [searchFilters]);
+
   // Load past papers when lesson or filters change
   useEffect(() => {
     const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
@@ -293,12 +302,13 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   };
 
   const classUpdateCount = classPosts.filter((post) =>
-    isRecentNotification(post.updatedAt || post.createdAt)
+    isRecentNotification(post.updatedAt || post.createdAt) && currentSubjectSet.has(post.subject)
   ).length;
   const subjectUpdateCount = latestNews.filter((item) => item.tag === "Update").length;
   const notificationItems = [
     ...classPosts
       .filter((post) => isRecentNotification(post.updatedAt || post.createdAt))
+      .filter((post) => currentSubjectSet.has(post.subject))
       .slice(0, 5)
       .map((post) => ({
         id: `class-${post._id || post.id}`,
@@ -515,6 +525,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       color: record?.color || subject.color,
     };
   });
+  const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
   const subjectIconMap = {
     physics: "⚛",
     atom: "⚛",
@@ -582,7 +593,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     });
   const activeSubjects = [...activeSubjectMap.values()];
   const currentSubjectNames = currentSubjects.map((subject) => subject.name).join(", ");
-  const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
   const getYoutubeEmbedUrl = (url) => {
     if (!url) return "";
     const text = String(url);
@@ -2235,6 +2245,11 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
                       <span className="post-teacher">{cls.teacher?.name || 'Teacher'}</span>
                     </div>
                   </div>
+                  {cls.image && (
+                    <div className="post-image">
+                      <img src={cls.image} alt={cls.title} style={{width: '100%', height: '150px', objectFit: 'cover', borderRadius: '8px'}} />
+                    </div>
+                  )}
                   <div className="post-content">
                     <h4>{cls.title}</h4>
                     <p className="post-description">{cls.description}</p>

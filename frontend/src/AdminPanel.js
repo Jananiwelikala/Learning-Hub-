@@ -194,6 +194,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
   }
 
   async function saveForm(e) {
+    if (modal.type === "post" && modal.mode === "view") return; // Post view mode doesn't use form submission
     e.preventDefault();
     const type = modal.type;
     const mode = modal.mode;
@@ -312,7 +313,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
     if (active === "notes") return <tr><th>Note</th><th>Lesson</th><th>File</th><th>Actions</th></tr>;
     if (active === "pastPapers") return <tr><th>Paper</th><th>Type</th><th>Year</th><th>Subject</th><th>Actions</th></tr>;
     if (active === "questions") return <tr><th>Question</th><th>Type</th><th>Year</th><th>Lesson</th><th>Actions</th></tr>;
-    return <tr><th>Title</th><th>Teacher</th><th>Subject</th><th>Status</th><th>Schedule</th><th>Actions</th></tr>;
+    return <tr><th>Image</th><th>Title</th><th>Teacher</th><th>Subject</th><th>Status</th><th>Schedule</th><th>Actions</th></tr>;
   }
 
   function renderRow(item) {
@@ -326,7 +327,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
     if (active === "notes") return <tr key={key}><td>{item.title}</td><td>{relationName(item, "lesson")}</td><td className="admin-url-cell">{item.fileUrl || "-"}</td><td>{actions("note")}</td></tr>;
     if (active === "pastPapers") return <tr key={key}><td>{item.title}</td><td>{item.paperType}</td><td>{item.examYear}</td><td>{relationName(item, "subject")}</td><td>{actions("pastPaper")}</td></tr>;
     if (active === "questions") return <tr key={key}><td>{String(item.prompt || "").slice(0, 80)}</td><td>{item.questionType}</td><td>{item.examYear}</td><td>{relationName(item, "lesson")}</td><td>{actions("question")}</td></tr>;
-    return <tr key={key}><td>{item.title}</td><td>{relationName(item, "teacher")}</td><td>{item.subject}</td><td><span className={`admin-status ${item.status}`}>{item.status}</span></td><td>{item.schedule || "-"}</td><td><div className="admin-actions">{item.status === "pending" && <><button onClick={() => reviewPost(item, "approved")}>Approve</button><button onClick={() => reviewPost(item, "rejected")}>Reject</button></>}<button className="danger" onClick={() => removeItem("post", item)}>Delete</button></div></td></tr>;
+    return <tr key={key}><td>{item.image ? <img src={item.image} alt={item.title} style={{width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px'}} /> : <span style={{color: '#999'}}>No image</span>}</td><td><button className="admin-link-button" onClick={() => openModal("post", "view", item)}>{item.title}</button></td><td>{relationName(item, "teacher")}</td><td>{item.subject}</td><td><span className={`admin-status ${item.status}`}>{item.status}</span></td><td>{item.schedule || "-"}</td><td><div className="admin-actions">{item.status === "pending" && <><button onClick={() => reviewPost(item, "approved")}>Approve</button><button onClick={() => reviewPost(item, "rejected")}>Reject</button></>}<button className="danger" onClick={() => removeItem("post", item)}>Delete</button></div></td></tr>;
   }
 
   function renderModalFields() {
@@ -339,6 +340,25 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
     if (type === "pastPaper") return <><Field label="Paper title" name="title" required/><SelectField label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), s.name])}/><SelectField label="Lesson" name="lessonId" options={[["", "No lesson"], ...lessons.map(l => [idOf(l), l.title])]}/><SelectField label="Paper type" name="paperType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"], ["full", "Full paper"]]}/><Field label="Exam year" name="examYear" type="number"/><Field label="File URL" name="fileUrl"/><Field label="Section" name="section"/><Field label="Questions count" name="questionsCount" type="number"/><Field label="Duration minutes" name="durationMinutes" type="number"/><SelectField label="Difficulty" name="difficulty" options={[["Easy", "Easy"], ["Medium", "Medium"], ["Hard", "Hard"]]}/></>;
     if (type === "question") return <><SelectField label="Question type" name="questionType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"]]}/><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><Field label="Question" name="prompt" required textarea/><Field label="Options (one per line for MCQ)" name="options" textarea/><Field label="Correct option index (0=A, 1=B, 2=C)" name="correctOptionIndex" type="number"/><Field label="Explanation" name="explanation" textarea/><Field label="Max marks" name="maxMarks" type="number"/><Field label="Exam year" name="examYear" type="number"/><Field label="Source label" name="sourceLabel"/></>;
     if (type === "user") return <><Field label="Name" name="name" required/><Field label="Email" name="email" type="email" required/><Field label={modal.mode === "edit" ? "New password (optional)" : "Password"} name="password" type="password" required={modal.mode !== "edit"}/><Field label="Phone" name="phone"/><SelectField label="Role" name="role" options={[["student", "Student"], ["teacher", "Teacher"], ["admin", "Admin"]]}/><Field label="Stream" name="stream"/><Field label="Subject" name="subject"/></>;
+    if (type === "post") return modal.mode === "view" ? <div className="admin-post-view">
+      <div className="admin-post-header">
+        {modal.item?.image && <img src={modal.item.image} alt={modal.item.title} className="admin-post-image" />}
+        <div>
+          <h3>{modal.item?.title}</h3>
+          <p className="admin-post-meta">By {relationName(modal.item, "teacher")} • {modal.item?.subject} • {modal.item?.grade}</p>
+          <span className={`admin-status ${modal.item?.status}`}>{modal.item?.status}</span>
+        </div>
+      </div>
+      <div className="admin-post-details">
+        <div className="admin-post-field"><strong>Description:</strong><p>{modal.item?.description}</p></div>
+        <div className="admin-post-field"><strong>Location:</strong><p>{modal.item?.location}</p></div>
+        <div className="admin-post-field"><strong>Schedule:</strong><p>{modal.item?.schedule}</p></div>
+        <div className="admin-post-field"><strong>Duration:</strong><p>{modal.item?.duration}</p></div>
+        <div className="admin-post-field"><strong>Fee:</strong><p>Rs. {modal.item?.fee}</p></div>
+        <div className="admin-post-field"><strong>Contact Info:</strong><p>{modal.item?.contactInfo}</p></div>
+        {modal.item?.rejectionReason && <div className="admin-post-field"><strong>Rejection Reason:</strong><p>{modal.item?.rejectionReason}</p></div>}
+      </div>
+    </div> : null;
     return null;
   }
 
@@ -352,7 +372,15 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
 
   return <div className="admin-shell-v2">
     <aside className={`admin-sidebar-v2 ${mobileOpen ? "open" : ""}`}>
-      <div className="admin-brand-v2"><div className="brand-orb">LH</div><div><strong>Learning Hub</strong><span>Admin Console</span></div></div>
+      <div className="admin-brand-v2">
+        <div className="brand-logo-shell admin-brand-logo">
+          <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
+        </div>
+        <div className="admin-brand-text">
+          <strong>Learning Hub</strong>
+          <span>Admin Console</span>
+        </div>
+      </div>
       <nav className="admin-nav-v2">{groups.map(group => <div key={group.id} className="admin-nav-group"><button className="admin-nav-parent" onClick={() => group.items.length === 1 ? setActive(group.items[0].id) : toggleGroup(group.id)}><span>{group.icon}</span><b>{group.label}</b><em>{openGroups[group.id] || group.items.length === 1 ? "⌃" : "⌄"}</em></button>{(openGroups[group.id] || group.items.length === 1) && <div className="admin-nav-children">{group.items.map(item => <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => { setActive(item.id); setMobileOpen(false); setSearch(""); }}>{item.label}</button>)}</div>}</div>)}</nav>
       <div className="admin-profile-box"><div className="admin-avatar">{adminName?.charAt(0)?.toUpperCase() || "A"}</div><div><strong>{adminName}</strong><span>Administrator</span></div><button onClick={onLogout}>Logout</button></div>
     </aside>
@@ -363,7 +391,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
       {renderTable()}
     </main>
 
-    {modal.open && <div className="admin-modal-backdrop"><form className="admin-modal-card" onSubmit={saveForm}><div className="admin-modal-head"><div><p>{modal.mode === "edit" ? "Edit" : "Create"}</p><h2>{modal.type}</h2></div><button type="button" onClick={closeModal}>×</button></div><div className="admin-form-grid">{renderModalFields()}</div><div className="admin-modal-actions"><button type="button" onClick={closeModal}>Cancel</button><button className="admin-primary" type="submit">{modal.mode === "edit" ? "Update" : "Save"}</button></div></form></div>}
+    {modal.open && <div className="admin-modal-backdrop">{modal.type === "post" && modal.mode === "view" ? <div className="admin-modal-card"><div className="admin-modal-head"><div><p>View</p><h2>Class Post</h2></div><button type="button" onClick={closeModal}>×</button></div><div className="admin-form-grid">{renderModalFields()}</div><div className="admin-modal-actions">{modal.item?.status === "pending" && <><button className="admin-primary" onClick={() => { reviewPost(modal.item, "approved"); closeModal(); }}>Approve</button><button className="danger" onClick={() => { reviewPost(modal.item, "rejected"); closeModal(); }}>Reject</button></>}<button onClick={() => removeItem("post", modal.item)}>Delete</button></div></div> : <form className="admin-modal-card" onSubmit={saveForm}><div className="admin-modal-head"><div><p>{modal.mode === "edit" ? "Edit" : "Create"}</p><h2>{modal.type}</h2></div><button type="button" onClick={closeModal}>×</button></div><div className="admin-form-grid">{renderModalFields()}</div><div className="admin-modal-actions"><button type="button" onClick={closeModal}>Cancel</button><button className="admin-primary" type="submit">{modal.mode === "edit" ? "Update" : "Save"}</button></div></form>}</div>}
   </div>;
 }
 

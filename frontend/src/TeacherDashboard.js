@@ -34,7 +34,7 @@ const emptyPostForm = {
   contactInfo: "",
   image: null,
   imagePreview: null,
-  status: "draft",
+  status: "pending",
 };
 
 const emptyProfile = {
@@ -496,7 +496,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
           <div className="teacher-form-actions">
             <button className="teacher-btn teacher-btn-outline" type="button" onClick={resetForm}>Clear</button>
             {!editingPostId && <button className="teacher-btn teacher-btn-soft" type="button" disabled={savingPost} onClick={() => savePost("draft")}>{savingPost ? "Saving..." : "Save Draft"}</button>}
-            <button className="teacher-btn teacher-btn-primary" type="button" disabled={savingPost} onClick={() => savePost(editingPostId ? formState.status : "pending")}>{savingPost ? "Saving..." : editingPostId ? "Update Post" : "Submit for Approval"}</button>
+            <button className="teacher-btn teacher-btn-primary" type="button" disabled={savingPost} onClick={() => savePost(editingPostId ? formState.status : "pending")}>{savingPost ? "Saving..." : editingPostId ? "Update Post" : "Create Post"}</button>
           </div>
         </div>
       </section>
