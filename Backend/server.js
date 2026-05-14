@@ -21,6 +21,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 const authRoutes = require("./routes/authRoutes");
 const studentRoutes = require("./routes/studentRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 const PUBLIC_REGISTER_ROLES = ["student", "teacher"];
@@ -61,6 +62,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api", authRoutes);
 app.use("/api/student", studentRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/streams", streamRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/class-posts", classPostRoutes);

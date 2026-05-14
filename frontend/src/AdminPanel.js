@@ -1,1094 +1,370 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import config from "./config";
 
-const initialStreams = [
-  { id: 1, name: "Science", description: "Advanced coursework for Science stream." },
-  { id: 2, name: "Commerce", description: "Business and economics learning path." },
-  { id: 3, name: "Arts", description: "Creative and humanities streams." },
-  { id: 4, name: "Technology", description: "Technology and applied science courses." },
+const API = `${config.API_BASE_URL}/admin`;
+
+const groups = [
+  { id: "dashboard", label: "Dashboard", icon: "🏠", items: [{ id: "dashboard", label: "Overview" }] },
+  { id: "users", label: "Users", icon: "👥", items: [{ id: "students", label: "Students" }, { id: "teachers", label: "Teachers" }, { id: "admins", label: "Admins" }] },
+  { id: "content", label: "Learning Content", icon: "📚", items: [{ id: "streams", label: "Streams" }, { id: "subjects", label: "Subjects" }, { id: "lessons", label: "Lessons" }, { id: "videos", label: "Lesson Videos" }, { id: "notes", label: "Notes" }] },
+  { id: "papers", label: "Past Papers", icon: "📝", items: [{ id: "pastPapers", label: "Papers" }, { id: "questions", label: "Questions" }] },
+  { id: "posts", label: "Class Posts", icon: "📢", items: [{ id: "pendingPosts", label: "Pending Approvals" }, { id: "approvedPosts", label: "Approved Posts" }, { id: "rejectedPosts", label: "Rejected Posts" }, { id: "allPosts", label: "All Posts" }] },
+  { id: "settings", label: "Admin Settings", icon: "⚙️", items: [{ id: "addAdmin", label: "Add Admin" }, { id: "account", label: "Account Management" }] },
 ];
 
-const initialSubjects = [
-  { id: 1, title: "Physics", stream: "Science" },
-  { id: 2, title: "Chemistry", stream: "Science" },
-  { id: 3, title: "Biology", stream: "Science" },
-  { id: 4, title: "Combined Maths", stream: "Science" },
-  { id: 5, title: "ICT", stream: "Science" },
-  { id: 6, title: "Accounting", stream: "Commerce" },
-  { id: 7, title: "Economics", stream: "Commerce" },
-  { id: 8, title: "Business Studies", stream: "Commerce" },
-  { id: 9, title: "ICT", stream: "Commerce" },
-  { id: 10, title: "Sinhala", stream: "Arts" },
-  { id: 11, title: "Political Science", stream: "Arts" },
-  { id: 12, title: "History", stream: "Arts" },
-  { id: 13, title: "Geography", stream: "Arts" },
-  { id: 14, title: "Logic", stream: "Arts" },
-  { id: 15, title: "Engineering Technology", stream: "Technology" },
-  { id: 16, title: "Bio Systems Technology", stream: "Technology" },
-  { id: 17, title: "Science for Technology", stream: "Technology" },
-];
-
-const initialLessons = [
-  {
-    id: 1,
-    title: "Measurements",
-    stream: "Science",
-    subject: "Physics",
-    chapter: 1,
-    status: "Published",
-    description: "Fundamentals of physical measurement and units.",
-  },
-  {
-    id: 2,
-    title: "Atomic Structure",
-    stream: "Science",
-    subject: "Chemistry",
-    chapter: 2,
-    status: "Draft",
-    description: "Introduction to atoms, elements and molecules.",
-  },
-];
-
-const initialVideos = [
-  {
-    id: 1,
-    title: "Physics: Measurements Overview",
-    url: "https://www.youtube.com/watch?v=MlQ4zM49xS0",
-    lesson: "Measurements",
-    subject: "Physics",
-    description: "A quick review of measurement basics.",
-    thumbnail: "https://img.youtube.com/vi/MlQ4zM49xS0/0.jpg",
-  },
-];
-
-const initialNotes = [
-  {
-    id: 1,
-    title: "Measurements Notes",
-    stream: "Science",
-    subject: "Physics",
-    lesson: "Measurements",
-    fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-    description: "Lesson notes and reference materials for measurements.",
-  },
-];
-
-const initialPosts = [
-  {
-    id: 1,
-    teacher: "Mr. Nimal",
-    subject: "Chemistry",
-    title: "Extra Revision Class",
-    type: "Online",
-    district: "Colombo",
-    contact: "+94 77 123 4567",
-    status: "Pending",
-  },
-  {
-    id: 2,
-    teacher: "Ms. Roshini",
-    subject: "Business Studies",
-    title: "Weekend Exam Practice",
-    type: "Physical",
-    district: "Kandy",
-    contact: "+94 71 987 6543",
-    status: "Approved",
-  },
-];
-
-const initialTeachers = [
-  {
-    id: 1,
-    name: "Ms. Kavindi",
-    email: "kavindi@gmail.com",
-    subject: "Physics",
-    approval: "Pending",
-    status: "Active",
-    phone: "+94 71 111 2222",
-    institute: "Anura College",
-  },
-  {
-    id: 2,
-    name: "Mr. Sanjeewa",
-    email: "sanjeewa@gmail.com",
-    subject: "Accounting",
-    approval: "Approved",
-    status: "Blocked",
-    phone: "+94 77 333 4444",
-    institute: "City Institute",
-  },
-];
-
-const initialStudents = [
-  {
-    id: 1,
-    name: "Kasun Perera",
-    email: "kasun@gmail.com",
-    stream: "Science",
-    year: "2026 A/L",
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Nadeesha Silva",
-    email: "nadeesha@gmail.com",
-    stream: "Commerce",
-    year: "2026 A/L",
-    status: "Active",
-  },
-];
-
-const initialSettings = {
-  platformName: "Learning Hub",
-  examDate: "2026-11-01",
-  latestNews: "A/L exam preparation resources updated weekly.",
-  homepageBanner: "Sri Lankan A/L Learning Platform for confident students.",
-  aiEnabled: true,
+const sectionTitles = {
+  dashboard: "Dashboard Overview",
+  students: "Manage Students",
+  teachers: "Manage Teachers",
+  admins: "Manage Admins",
+  streams: "Manage Streams",
+  subjects: "Manage Subjects",
+  lessons: "Manage Lessons",
+  videos: "Manage Lesson Videos",
+  notes: "Manage Notes",
+  pastPapers: "Manage Past Papers",
+  questions: "Manage Past Paper Questions",
+  pendingPosts: "Pending Class Post Approvals",
+  approvedPosts: "Approved Class Posts",
+  rejectedPosts: "Rejected Class Posts",
+  allPosts: "All Class Posts",
+  addAdmin: "Add New Admin",
+  account: "Admin Account Management",
 };
 
-const menuItems = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "streams", label: "Streams" },
-  { id: "subjects", label: "Subjects" },
-  { id: "lessons", label: "Lessons" },
-  { id: "videos", label: "Lesson Videos" },
-  { id: "notes", label: "Notes / Materials" },
-  { id: "posts", label: "Class Posts" },
-  { id: "teacherApproval", label: "Teacher Approval" },
-  { id: "users", label: "Users" },
-  { id: "settings", label: "Settings" },
-];
+const emptyForms = {
+  stream: { name: "", sinhalaName: "", description: "", code: "", icon: "📘", color: "#14b8a6", order: 0 },
+  subject: { name: "", sinhalaName: "", streamId: "", code: "", icon: "📗", color: "#0ea5e9", papersCount: 0, studentsCount: 0, order: 0 },
+  lesson: { title: "", sinhalaTitle: "", description: "", subjectId: "", order: 0, durationMinutes: 0, videoTitle: "", videoLink: "", notesUrl: "", pastPaperMcqUrl: "", pastPaperStructuredUrl: "", pastPaperEssayUrl: "" },
+  video: { title: "", url: "", description: "", duration: "", lessonId: "" },
+  note: { title: "", description: "", fileUrl: "", pages: 0, fileSize: "", lessonId: "", subjectId: "", order: 0 },
+  pastPaper: { title: "", paperType: "mcq", examYear: new Date().getFullYear(), fileUrl: "", section: "", questionsCount: 0, durationMinutes: 0, difficulty: "Medium", subjectId: "", lessonId: "" },
+  question: { questionType: "mcq", lessonId: "", prompt: "", options: "", correctOptionIndex: 0, explanation: "", maxMarks: 1, examYear: new Date().getFullYear(), sourceLabel: "A/L Past Paper" },
+  user: { name: "", email: "", password: "", phone: "", role: "student", stream: "", subject: "" },
+};
 
-function AdminPanel({ adminName, onLogout }) {
-  const [activeSection, setActiveSection] = useState("dashboard");
+function getToken() {
+  return localStorage.getItem("token") || "";
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "Request failed");
+  return data;
+}
+
+function idOf(item) {
+  return item?._id || item?.id;
+}
+
+function relationName(item, key) {
+  const value = item?.[key];
+  if (!value) return "-";
+  if (typeof value === "object") return value.name || value.title || value.email || "-";
+  return value;
+}
+
+function toLessonId(value) {
+  return value?.lesson?._id || value?.lesson || value?.lessonId || "";
+}
+
+function toSubjectId(value) {
+  return value?.subject?._id || value?.subject || value?.subjectId || "";
+}
+
+function AdminPanel({ adminName = "Admin", onLogout }) {
+  const [active, setActive] = useState("dashboard");
+  const [openGroups, setOpenGroups] = useState({ users: true, content: true, papers: true, posts: true });
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [streams, setStreams] = useState(initialStreams);
-  const [subjects, setSubjects] = useState(initialSubjects);
-  const [lessons, setLessons] = useState(initialLessons);
-  const [videos, setVideos] = useState(initialVideos);
-  const [notes, setNotes] = useState(initialNotes);
-  const [posts, setPosts] = useState(initialPosts);
-  const [teachers, setTeachers] = useState(initialTeachers);
-  const [students, setStudents] = useState(initialStudents);
-  const [settings, setSettings] = useState(initialSettings);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState("add");
-  const [modalItem, setModalItem] = useState(null);
-  const [formState, setFormState] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+  const [dashboard, setDashboard] = useState({});
+  const [streams, setStreams] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [lessons, setLessons] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [pastPapers, setPastPapers] = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [modal, setModal] = useState({ open: false, type: "", mode: "add", item: null });
+  const [form, setForm] = useState({});
 
-  const counts = useMemo(() => ({
-    totalStudents: students.length,
-    totalTeachers: teachers.length,
-    pendingTeacherApprovals: teachers.filter((item) => item.approval === "Pending").length,
-    totalStreams: streams.length,
-    totalSubjects: subjects.length,
-    totalLessons: lessons.length,
-    totalPosts: posts.length,
-  }), [students, teachers, streams, subjects, lessons, posts]);
-
-  const summaryCards = [
-    { label: "Total Students", value: counts.totalStudents, color: "#2563eb" },
-    { label: "Total Teachers", value: counts.totalTeachers, color: "#0ea5e9" },
-    { label: "Pending Teacher Approvals", value: counts.pendingTeacherApprovals, color: "#f59e0b" },
-    { label: "Total Streams", value: counts.totalStreams, color: "#22c55e" },
-    { label: "Total Subjects", value: counts.totalSubjects, color: "#6366f1" },
-    { label: "Total Lessons", value: counts.totalLessons, color: "#0f766e" },
-    { label: "Total Class Posts", value: counts.totalPosts, color: "#f97316" },
-  ];
-
-  const sections = {
-    dashboard: "Dashboard",
-    streams: "Streams",
-    subjects: "Subjects",
-    lessons: "Lessons",
-    videos: "Lesson Videos",
-    notes: "Notes / Materials",
-    posts: "Class Posts",
-    teacherApproval: "Teacher Approval",
-    users: "Users",
-    settings: "Settings",
+  const loadAll = async () => {
+    setLoading(true);
+    setMessage("");
+    try {
+      const [dash, streamData, subjectData, lessonData, videoData, noteData, paperData, questionData, postData, userData] = await Promise.all([
+        request("/dashboard"),
+        request("/streams"),
+        request("/subjects"),
+        request("/lessons"),
+        request("/videos"),
+        request("/notes"),
+        request("/past-papers"),
+        request("/questions"),
+        request("/class-posts"),
+        request("/users"),
+      ]);
+      setDashboard(dash);
+      setStreams(streamData);
+      setSubjects(subjectData);
+      setLessons(lessonData);
+      setVideos(videoData);
+      setNotes(noteData);
+      setPastPapers(paperData);
+      setQuestions(questionData);
+      setPosts(postData);
+      setUsers(userData);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  function openModal(mode, item = null) {
-    setModalMode(mode);
-    setModalItem(item);
+  useEffect(() => {
+    loadAll();
+  }, []);
 
-    const defaultForm = {
-      name: "",
-      description: "",
-      stream: "",
-      subject: "",
-      chapter: "",
-      status: "Draft",
-      title: "",
-      url: "",
-      thumbnail: "",
-      fileUrl: "",
-      type: "Online",
-      district: "",
-      contact: "",
-      approval: "Pending",
-      accountStatus: "Active",
-      email: "",
-      year: "2026 A/L",
-      latestNews: settings.latestNews,
-      platformName: settings.platformName,
-      examDate: settings.examDate,
-      homepageBanner: settings.homepageBanner,
-      aiEnabled: settings.aiEnabled,
-    };
+  const filtered = (items) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => JSON.stringify(item).toLowerCase().includes(q));
+  };
 
-    if (item) {
-      setFormState(item);
-    } else {
-      setFormState(defaultForm);
-    }
+  const currentRows = useMemo(() => {
+    if (active === "students") return filtered(users.filter((u) => u.role === "student"));
+    if (active === "teachers") return filtered(users.filter((u) => u.role === "teacher"));
+    if (active === "admins" || active === "account") return filtered(users.filter((u) => u.role === "admin"));
+    if (active === "streams") return filtered(streams);
+    if (active === "subjects") return filtered(subjects);
+    if (active === "lessons") return filtered(lessons);
+    if (active === "videos") return filtered(videos);
+    if (active === "notes") return filtered(notes);
+    if (active === "pastPapers") return filtered(pastPapers);
+    if (active === "questions") return filtered(questions);
+    if (active === "pendingPosts") return filtered(posts.filter((p) => p.status === "pending"));
+    if (active === "approvedPosts") return filtered(posts.filter((p) => p.status === "approved"));
+    if (active === "rejectedPosts") return filtered(posts.filter((p) => p.status === "rejected"));
+    if (active === "allPosts") return filtered(posts);
+    return [];
+  }, [active, users, streams, subjects, lessons, videos, notes, pastPapers, questions, posts, search]);
 
-    setModalOpen(true);
+  function toggleGroup(id) {
+    setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function openModal(type, mode = "add", item = null, defaults = {}) {
+    const base = { ...(emptyForms[type] || {}), ...defaults };
+    const mapped = item ? mapItemToForm(type, item) : base;
+    setForm(mapped);
+    setModal({ open: true, type, mode, item });
   }
 
   function closeModal() {
-    setModalOpen(false);
-    setModalItem(null);
-    setFormState({});
+    setModal({ open: false, type: "", mode: "add", item: null });
+    setForm({});
   }
 
-  function handleFormChange(key, value) {
-    setFormState((prev) => ({ ...prev, [key]: value }));
+  function change(name, value) {
+    setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function saveModal() {
-    const nextId = Date.now();
-    const activeData = getCurrentData();
-    const updateState = getUpdateState();
-    if (!updateState) return;
-
-    const updatedItem = { ...modalItem, ...formState, id: modalItem?.id || nextId };
-
-    if (modalMode === "edit") {
-      updateState.set(activeData.map((item) => (item.id === updatedItem.id ? updatedItem : item)));
-    } else {
-      updateState.set([...activeData, updatedItem]);
-    }
-
-    closeModal();
+  function mapItemToForm(type, item) {
+    if (type === "stream") return { ...emptyForms.stream, ...item };
+    if (type === "subject") return { ...emptyForms.subject, ...item, streamId: item.stream?._id || item.stream || "" };
+    if (type === "lesson") return { ...emptyForms.lesson, ...item, subjectId: toSubjectId(item), videoLink: item.videoLink || item.videoUrl || "" };
+    if (type === "video") return { ...emptyForms.video, ...item, lessonId: item.lessonId || "" };
+    if (type === "note") return { ...emptyForms.note, ...item, lessonId: toLessonId(item), subjectId: toSubjectId(item) };
+    if (type === "pastPaper") return { ...emptyForms.pastPaper, ...item, lessonId: toLessonId(item), subjectId: toSubjectId(item) };
+    if (type === "question") return { ...emptyForms.question, ...item, lessonId: toLessonId(item), prompt: item.prompt || item.questionText || item.question || "", options: Array.isArray(item.options) ? item.options.join("\n") : item.options || "" };
+    if (type === "user") return { ...emptyForms.user, ...item, password: "" };
+    return item || {};
   }
 
-  function getCurrentData() {
-    switch (activeSection) {
-      case "streams":
-        return streams;
-      case "subjects":
-        return subjects;
-      case "lessons":
-        return lessons;
-      case "videos":
-        return videos;
-      case "notes":
-        return notes;
-      case "posts":
-        return posts;
-      case "teacherApproval":
-        return teachers;
-      case "users":
-        return students.concat(teachers);
-      default:
-        return [];
-    }
-  }
-
-  function getUpdateState() {
-    switch (activeSection) {
-      case "streams":
-        return { set: setStreams };
-      case "subjects":
-        return { set: setSubjects };
-      case "lessons":
-        return { set: setLessons };
-      case "videos":
-        return { set: setVideos };
-      case "notes":
-        return { set: setNotes };
-      case "posts":
-        return { set: setPosts };
-      case "teacherApproval":
-        return { set: setTeachers };
-      case "users":
-        return { set: setStudents };
-      default:
-        return null;
+  async function saveForm(e) {
+    e.preventDefault();
+    const type = modal.type;
+    const mode = modal.mode;
+    const itemId = idOf(modal.item);
+    const endpoints = {
+      stream: "/streams",
+      subject: "/subjects",
+      lesson: "/lessons",
+      video: "/videos",
+      note: "/notes",
+      pastPaper: "/past-papers",
+      question: "/questions",
+      user: "/users",
+    };
+    const endpoint = endpoints[type];
+    const body = { ...form };
+    if (type === "question" && body.questionType !== "mcq") body.correctOptionIndex = 0;
+    try {
+      await request(mode === "edit" ? `${endpoint}/${encodeURIComponent(itemId)}` : endpoint, {
+        method: mode === "edit" ? "PUT" : "POST",
+        body: JSON.stringify(body),
+      });
+      setMessage(`${mode === "edit" ? "Updated" : "Added"} successfully.`);
+      closeModal();
+      await loadAll();
+    } catch (err) {
+      setMessage(err.message);
     }
   }
 
-  function removeItem(id, listType) {
-    const updateState =
-      listType === "teacher"
-        ? { set: setTeachers }
-        : listType === "student"
-        ? { set: setStudents }
-        : getUpdateState();
-
-    if (!updateState) return;
-
-    if (!window.confirm("Are you sure you want to delete this item?")) {
-      return;
-    }
-
-    const currentData = listType === "teacher" ? teachers : listType === "student" ? students : getCurrentData();
-    updateState.set(currentData.filter((item) => item.id !== id));
-  }
-
-  function togglePostStatus(id, nextStatus) {
-    setPosts((current) =>
-      current.map((item) => (item.id === id ? { ...item, status: nextStatus } : item))
-    );
-  }
-
-  function handleTeacherAction(id, action) {
-    setTeachers((current) =>
-      current.map((item) => {
-        if (item.id !== id) return item;
-        if (action === "approve") return { ...item, approval: "Approved", status: "Active" };
-        if (action === "reject") return { ...item, approval: "Rejected", status: item.status };
-        if (action === "block") return { ...item, status: "Blocked" };
-        return item;
-      })
-    );
-  }
-
-  function filterItems(items) {
-    const query = searchTerm.trim().toLowerCase();
-    return items.filter((item) => {
-      const text = Object.values(item)
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const matchesText = !query || text.includes(query);
-      const matchesStatus =
-        filterStatus === "all" || item.status?.toLowerCase() === filterStatus.toLowerCase();
-      return matchesText && matchesStatus;
-    });
-  }
-
-  function renderSectionContent() {
-    const filteredStreams = filterItems(streams);
-    const filteredSubjects = filterItems(subjects);
-    const filteredLessons = filterItems(lessons);
-    const filteredVideos = filterItems(videos);
-    const filteredNotes = filterItems(notes);
-    const filteredPosts = filterItems(posts);
-    const filteredTeachers = filterItems(teachers);
-    const filteredStudents = filterItems(students);
-
-    switch (activeSection) {
-      case "dashboard":
-        return (
-          <>
-            <div className="admin-welcome-card">
-              <div>
-                <p className="small-label">Welcome back,</p>
-                <h2>{adminName}</h2>
-                <p className="muted-text">Manage your platform with quick actions, review approvals, and keep the dashboard updated.</p>
-              </div>
-              <div className="admin-welcome-actions">
-                <button className="btn solid" onClick={() => setActiveSection("streams")}>Add Stream</button>
-                <button className="btn outline" onClick={() => setActiveSection("teacherApproval")}>Review Teachers</button>
-              </div>
-            </div>
-            <div className="dashboard-grid">
-              {summaryCards.map((card) => (
-                <div className="summary-card" key={card.label} style={{ borderTopColor: card.color }}>
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
-                </div>
-              ))}
-            </div>
-          </>
-        );
-      case "streams":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Stream management</h3>
-                <p>Manage the main curriculum streams available to students.</p>
-              </div>
-              <button className="btn solid" onClick={() => openModal("add")}>Add Stream</button>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search streams"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Stream</th>
-                    <th>Description</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredStreams.map((stream) => (
-                    <tr key={stream.id}>
-                      <td>{stream.name}</td>
-                      <td>{stream.description}</td>
-                      <td className="actions-cell">
-                        <button className="action-btn" onClick={() => openModal("edit", stream)}>Edit</button>
-                        <button className="action-btn danger" onClick={() => removeItem(stream.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "subjects":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Subject management</h3>
-                <p>Add, edit and categorize subjects by stream.</p>
-              </div>
-              <button className="btn solid" onClick={() => openModal("add")}>Add Subject</button>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search subjects"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                <option value="all">All streams</option>
-                <option value="Science">Science</option>
-                <option value="Commerce">Commerce</option>
-                <option value="Arts">Arts</option>
-                <option value="Technology">Technology</option>
-              </select>
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Subject</th>
-                    <th>Stream</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSubjects.map((subject) => (
-                    <tr key={subject.id}>
-                      <td>{subject.title}</td>
-                      <td>{subject.stream}</td>
-                      <td className="actions-cell">
-                        <button className="action-btn" onClick={() => openModal("edit", subject)}>Edit</button>
-                        <button className="action-btn danger" onClick={() => removeItem(subject.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "lessons":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Lesson management</h3>
-                <p>Create and publish lessons for students.</p>
-              </div>
-              <button className="btn solid" onClick={() => openModal("add")}>Add Lesson</button>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search lessons"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                <option value="all">All statuses</option>
-                <option value="Published">Published</option>
-                <option value="Draft">Draft</option>
-              </select>
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Lesson</th>
-                    <th>Subject</th>
-                    <th>Stream</th>
-                    <th>Chapter</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLessons.map((lesson) => (
-                    <tr key={lesson.id}>
-                      <td>{lesson.title}</td>
-                      <td>{lesson.subject}</td>
-                      <td>{lesson.stream}</td>
-                      <td>{lesson.chapter}</td>
-                      <td>{lesson.status}</td>
-                      <td className="actions-cell">
-                        <button className="action-btn" onClick={() => openModal("edit", lesson)}>Edit</button>
-                        <button className="action-btn danger" onClick={() => removeItem(lesson.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "videos":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Lesson videos</h3>
-                <p>Manage video lessons and lesson resources.</p>
-              </div>
-              <button className="btn solid" onClick={() => openModal("add")}>Add Video</button>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search videos"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Lesson</th>
-                    <th>Subject</th>
-                    <th>URL</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredVideos.map((video) => (
-                    <tr key={video.id}>
-                      <td>{video.title}</td>
-                      <td>{video.lesson}</td>
-                      <td>{video.subject}</td>
-                      <td><a href={video.url} target="_blank" rel="noreferrer">Link</a></td>
-                      <td className="actions-cell">
-                        <button className="action-btn" onClick={() => openModal("edit", video)}>Edit</button>
-                        <button className="action-btn danger" onClick={() => removeItem(video.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "notes":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Notes and materials</h3>
-                <p>Upload or assign lesson materials for every chapter.</p>
-              </div>
-              <button className="btn solid" onClick={() => openModal("add")}>Add Material</button>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search notes"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Lesson</th>
-                    <th>Subject</th>
-                    <th>Stream</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredNotes.map((note) => (
-                    <tr key={note.id}>
-                      <td>{note.title}</td>
-                      <td>{note.lesson}</td>
-                      <td>{note.subject}</td>
-                      <td>{note.stream}</td>
-                      <td className="actions-cell">
-                        <button className="action-btn" onClick={() => openModal("edit", note)}>Edit</button>
-                        <button className="action-btn danger" onClick={() => removeItem(note.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "posts":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Class posts</h3>
-                <p>Approve or reject teacher posts and keep the marketplace safe.</p>
-              </div>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search posts"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                <option value="all">All statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-              </select>
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Teacher</th>
-                    <th>Subject</th>
-                    <th>Title</th>
-                    <th>Type</th>
-                    <th>District</th>
-                    <th>Contact</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPosts.map((post) => (
-                    <tr key={post.id}>
-                      <td>{post.teacher}</td>
-                      <td>{post.subject}</td>
-                      <td>{post.title}</td>
-                      <td>{post.type}</td>
-                      <td>{post.district}</td>
-                      <td>{post.contact}</td>
-                      <td><span className={`status-badge ${post.status.toLowerCase()}`}>{post.status}</span></td>
-                      <td className="actions-cell">
-                        {post.status === "Pending" && (
-                          <>
-                            <button className="action-btn" onClick={() => togglePostStatus(post.id, "Approved")}>Approve</button>
-                            <button className="action-btn danger" onClick={() => togglePostStatus(post.id, "Rejected")}>Reject</button>
-                          </>
-                        )}
-                        <button className="action-btn" onClick={() => openModal("edit", post)}>Edit</button>
-                        <button className="action-btn danger" onClick={() => removeItem(post.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "teacherApproval":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Teacher approval</h3>
-                <p>Approve or reject new teacher accounts before they join the platform.</p>
-              </div>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search teachers"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Subject</th>
-                    <th>Institute</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTeachers.map((teacher) => (
-                    <tr key={teacher.id}>
-                      <td>{teacher.name}</td>
-                      <td>{teacher.email}</td>
-                      <td>{teacher.subject}</td>
-                      <td>{teacher.institute}</td>
-                      <td>{teacher.approval}</td>
-                      <td className="actions-cell">
-                        <button className="action-btn" onClick={() => handleTeacherAction(teacher.id, "approve")}>Approve</button>
-                        <button className="action-btn danger" onClick={() => handleTeacherAction(teacher.id, "reject")}>Reject</button>
-                        <button className="action-btn" onClick={() => handleTeacherAction(teacher.id, "block")}>Block</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      case "users":
-        return (
-          <div className="admin-section-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>User management</h3>
-                <p>Manage student and teacher accounts in one place.</p>
-              </div>
-            </div>
-            <div className="table-toolbar">
-              <input
-                type="search"
-                placeholder="Search users"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                <option value="all">All users</option>
-                <option value="Active">Active students</option>
-                <option value="Blocked">Blocked students</option>
-              </select>
-            </div>
-            <div className="table-section">
-              <h4>Students</h4>
-              <div className="table-scroll">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Stream</th>
-                      <th>A/L Year</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStudents.map((student) => (
-                      <tr key={student.id}>
-                        <td>{student.name}</td>
-                        <td>{student.email}</td>
-                        <td>{student.stream}</td>
-                        <td>{student.year}</td>
-                        <td>{student.status}</td>
-                        <td className="actions-cell">
-                          <button className="action-btn">View</button>
-                          <button className="action-btn danger">Block</button>
-                          <button className="action-btn danger" onClick={() => removeItem(student.id, "student")}>Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="table-section">
-              <h4>Teachers</h4>
-              <div className="table-scroll">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Subject</th>
-                      <th>Approval</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTeachers.map((teacher) => (
-                      <tr key={teacher.id}>
-                        <td>{teacher.name}</td>
-                        <td>{teacher.email}</td>
-                        <td>{teacher.subject}</td>
-                        <td>{teacher.approval}</td>
-                        <td>{teacher.status}</td>
-                        <td className="actions-cell">
-                          <button className="action-btn">View</button>
-                          <button className="action-btn" onClick={() => handleTeacherAction(teacher.id, "approve")}>Approve</button>
-                          <button className="action-btn danger" onClick={() => handleTeacherAction(teacher.id, "block")}>Block</button>
-                          <button className="action-btn danger" onClick={() => removeItem(teacher.id, "teacher")}>Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        );
-      case "settings":
-        return (
-          <div className="admin-section-panel settings-panel">
-            <div className="section-header-row">
-              <div>
-                <h3>Platform settings</h3>
-                <p>Update branding, exam details, news, and AI assistant controls.</p>
-              </div>
-            </div>
-            <div className="settings-grid">
-              <label>
-                Platform name
-                <input
-                  value={settings.platformName}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, platformName: e.target.value }))}
-                />
-              </label>
-              <label>
-                A/L exam date
-                <input
-                  type="date"
-                  value={settings.examDate}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, examDate: e.target.value }))}
-                />
-              </label>
-              <label>
-                Latest news text
-                <textarea
-                  value={settings.latestNews}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, latestNews: e.target.value }))}
-                />
-              </label>
-              <label>
-                Homepage banner text
-                <textarea
-                  value={settings.homepageBanner}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, homepageBanner: e.target.value }))}
-                />
-              </label>
-              <label className="toggle-row">
-                <span>AI assistant</span>
-                <button
-                  className={settings.aiEnabled ? "toggle active" : "toggle"}
-                  onClick={() => setSettings((prev) => ({ ...prev, aiEnabled: !prev.aiEnabled }))}
-                >
-                  {settings.aiEnabled ? "Enabled" : "Disabled"}
-                </button>
-              </label>
-            </div>
-          </div>
-        );
-      default:
-        return null;
+  async function removeItem(type, item) {
+    if (!window.confirm("Are you sure you want to delete this item?")) return;
+    const endpoint = {
+      stream: "/streams",
+      subject: "/subjects",
+      lesson: "/lessons",
+      video: "/videos",
+      note: "/notes",
+      pastPaper: "/past-papers",
+      question: "/questions",
+      user: "/users",
+      post: "/class-posts",
+    }[type];
+    try {
+      await request(`${endpoint}/${encodeURIComponent(idOf(item))}`, { method: "DELETE" });
+      setMessage("Deleted successfully.");
+      await loadAll();
+    } catch (err) {
+      setMessage(err.message);
     }
   }
 
-  function renderModalContent() {
-    const header = modalMode === "edit" ? `Edit ${sections[activeSection]}` : `Add ${sections[activeSection]}`;
-    const formItems = [];
-
-    if (activeSection === "streams") {
-      formItems.push(
-        { label: "Stream name", key: "name", type: "text" },
-        { label: "Description", key: "description", type: "textarea" }
-      );
+  async function reviewPost(post, status) {
+    const rejectionReason = status === "rejected" ? window.prompt("Reason for rejection", "Please update the class post details.") || "" : "";
+    try {
+      await request(`/class-posts/${idOf(post)}/review`, { method: "PUT", body: JSON.stringify({ status, rejectionReason }) });
+      setMessage(`Class post ${status}.`);
+      await loadAll();
+    } catch (err) {
+      setMessage(err.message);
     }
+  }
 
-    if (activeSection === "subjects") {
-      formItems.push(
-        { label: "Subject title", key: "title", type: "text" },
-        { label: "Stream", key: "stream", type: "text" }
-      );
-    }
+  function addButton() {
+    if (active === "streams") return <button className="admin-primary" onClick={() => openModal("stream")}>+ Add Stream</button>;
+    if (active === "subjects") return <button className="admin-primary" onClick={() => openModal("subject")}>+ Add Subject</button>;
+    if (active === "lessons") return <button className="admin-primary" onClick={() => openModal("lesson")}>+ Add Lesson</button>;
+    if (active === "videos") return <button className="admin-primary" onClick={() => openModal("video")}>+ Add Video</button>;
+    if (active === "notes") return <button className="admin-primary" onClick={() => openModal("note")}>+ Add Note</button>;
+    if (active === "pastPapers") return <button className="admin-primary" onClick={() => openModal("pastPaper")}>+ Add Paper</button>;
+    if (active === "questions") return <button className="admin-primary" onClick={() => openModal("question")}>+ Add Question</button>;
+    if (["students", "teachers", "admins", "account"].includes(active)) return <button className="admin-primary" onClick={() => openModal("user", "add", null, { role: active === "teachers" ? "teacher" : active === "students" ? "student" : "admin" })}>+ Add {active === "teachers" ? "Teacher" : active === "students" ? "Student" : "Admin"}</button>;
+    return null;
+  }
 
-    if (activeSection === "lessons") {
-      formItems.push(
-        { label: "Lesson title", key: "title", type: "text" },
-        { label: "Stream", key: "stream", type: "text" },
-        { label: "Subject", key: "subject", type: "text" },
-        { label: "Chapter number", key: "chapter", type: "number" },
-        { label: "Status", key: "status", type: "select", options: ["Draft", "Published"] },
-        { label: "Description", key: "description", type: "textarea" }
-      );
-    }
-
-    if (activeSection === "videos") {
-      formItems.push(
-        { label: "Video title", key: "title", type: "text" },
-        { label: "YouTube / video URL", key: "url", type: "text" },
-        { label: "Lesson", key: "lesson", type: "text" },
-        { label: "Subject", key: "subject", type: "text" },
-        { label: "Thumbnail URL", key: "thumbnail", type: "text" },
-        { label: "Description", key: "description", type: "textarea" }
-      );
-    }
-
-    if (activeSection === "notes") {
-      formItems.push(
-        { label: "Material title", key: "title", type: "text" },
-        { label: "Stream", key: "stream", type: "text" },
-        { label: "Subject", key: "subject", type: "text" },
-        { label: "Lesson", key: "lesson", type: "text" },
-        { label: "File URL", key: "fileUrl", type: "text" },
-        { label: "Description", key: "description", type: "textarea" }
-      );
-    }
-
-    if (activeSection === "posts") {
-      formItems.push(
-        { label: "Teacher name", key: "teacher", type: "text" },
-        { label: "Subject", key: "subject", type: "text" },
-        { label: "Class title", key: "title", type: "text" },
-        { label: "Online / Physical", key: "type", type: "text" },
-        { label: "District", key: "district", type: "text" },
-        { label: "Contact number", key: "contact", type: "text" },
-        { label: "Status", key: "status", type: "select", options: ["Pending", "Approved", "Rejected"] }
-      );
-    }
-
-    if (activeSection === "teacherApproval") {
-      formItems.push(
-        { label: "Name", key: "name", type: "text" },
-        { label: "Email", key: "email", type: "text" },
-        { label: "Phone", key: "phone", type: "text" },
-        { label: "Main subject", key: "subject", type: "text" },
-        { label: "Institute / class name", key: "institute", type: "text" },
-        { label: "Approval status", key: "approval", type: "select", options: ["Pending", "Approved", "Rejected"] }
-      );
-    }
-
-    if (activeSection === "users") {
-      formItems.push(
-        { label: "Name", key: "name", type: "text" },
-        { label: "Email", key: "email", type: "text" },
-        { label: "Stream", key: "stream", type: "text" },
-        { label: "A/L year", key: "year", type: "text" },
-        { label: "Status", key: "status", type: "text" }
-      );
-    }
-
-    return (
-      <div className="modal-overlay" onClick={closeModal}>
-        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <div>
-              <h3>{header}</h3>
-              <p>Update the information for the selected admin resource.</p>
-            </div>
-            <button className="modal-close-btn" onClick={closeModal}>&times;</button>
-          </div>
-          <div className="modal-body">
-            {formItems.map((field) => (
-              <label key={field.key} className="modal-field">
-                <span>{field.label}</span>
-                {field.type === "textarea" ? (
-                  <textarea
-                    value={formState[field.key] || ""}
-                    onChange={(e) => handleFormChange(field.key, e.target.value)}
-                  />
-                ) : field.type === "select" ? (
-                  <select
-                    value={formState[field.key] || ""}
-                    onChange={(e) => handleFormChange(field.key, e.target.value)}
-                  >
-                    {(field.options || []).map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type={field.type}
-                    value={formState[field.key] || ""}
-                    onChange={(e) => handleFormChange(field.key, e.target.value)}
-                  />
-                )}
-              </label>
-            ))}
-          </div>
-          <div className="modal-actions">
-            <button className="btn outline" onClick={closeModal}>Cancel</button>
-            <button className="btn solid" onClick={saveModal}>{modalMode === "edit" ? "Save changes" : "Create"}</button>
-          </div>
+  function renderDashboard() {
+    const cards = [
+      ["Students", dashboard.students, "👩‍🎓"], ["Teachers", dashboard.teachers, "👨‍🏫"], ["Admins", dashboard.admins, "🛡️"],
+      ["Streams", dashboard.streams, "🌊"], ["Subjects", dashboard.subjects, "📘"], ["Lessons", dashboard.lessons, "🎬"],
+      ["Videos", dashboard.videos, "▶️"], ["Notes", dashboard.notes, "📄"], ["Questions", dashboard.questions, "❓"], ["Pending Posts", dashboard.pendingPosts, "⏳"],
+    ];
+    return <>
+      <div className="admin-hero-card">
+        <div>
+          <span className="admin-pill">Learning Hub Admin</span>
+          <h2>Good day, {adminName}</h2>
+          <p>Manage students, teachers, streams, lessons, notes, past papers, class post approvals, and admin accounts from one clean dashboard.</p>
         </div>
+        <button className="admin-primary" onClick={() => openModal("lesson")}>Add new lesson</button>
       </div>
-    );
+      <div className="admin-stat-grid">{cards.map(([label, value, icon]) => <button className="admin-stat-card" key={label} onClick={() => setActive(label === "Pending Posts" ? "pendingPosts" : label.toLowerCase())}><span>{icon}</span><p>{label}</p><strong>{value ?? 0}</strong></button>)}</div>
+      <div className="admin-two-grid">
+        <div className="admin-panel-card"><h3>Pending approvals</h3>{posts.filter(p => p.status === "pending").slice(0, 5).map(p => <div className="admin-mini-row" key={idOf(p)}><span>{p.title}</span><button onClick={() => reviewPost(p, "approved")}>Approve</button></div>)}{posts.filter(p => p.status === "pending").length === 0 && <p className="admin-muted">No pending class posts.</p>}</div>
+        <div className="admin-panel-card"><h3>Recently added lessons</h3>{lessons.slice(0, 5).map(l => <div className="admin-mini-row" key={idOf(l)}><span>{l.title}</span><small>{relationName(l, "subject")}</small></div>)}</div>
+      </div>
+    </>;
   }
 
-  return (
-    <div className="admin-shell">
-      <aside className={`admin-sidebar ${mobileOpen ? "open" : ""}`}>
-        <div className="sidebar-brand">
-          <span className="brand-mark brand-logo-shell">
-            <img src="/logo1.png" alt="Learning Hub logo" className="brand-logo-image" />
-          </span>
-          <div>
-            <p className="brand-label">Learning Hub</p>
-            <p className="brand-subtitle">Admin panel</p>
-          </div>
-        </div>
-        <nav className="sidebar-list">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              className={activeSection === item.id ? "sidebar-link active" : "sidebar-link"}
-              onClick={() => {
-                setActiveSection(item.id);
-                setSearchTerm("");
-                setFilterStatus("all");
-                setMobileOpen(false);
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <button className="btn outline" onClick={onLogout}>Logout</button>
-        </div>
-      </aside>
-      <main className="admin-main">
-        <div className="admin-topbar">
-          <button className="mobile-menu-btn" onClick={() => setMobileOpen((prev) => !prev)}>
-            ☰
-          </button>
-          <div>
-            <p className="top-info">Admin Dashboard</p>
-            <h1>{sections[activeSection]}</h1>
-          </div>
-          <div className="top-actions">
-            <button className="btn outline">{adminName}</button>
-            <button className="btn solid" onClick={onLogout}>Logout</button>
-          </div>
-        </div>
-        <div className="admin-content">{renderSectionContent()}</div>
-      </main>
-      {modalOpen && renderModalContent()}
-    </div>
-  );
+  function renderTable() {
+    if (active === "dashboard") return renderDashboard();
+    if (active === "addAdmin") return <div className="admin-panel-card"><h3>Create another admin account</h3><p className="admin-muted">Admin accounts are stored in MongoDB and can login to this admin dashboard.</p><button className="admin-primary" onClick={() => openModal("user", "add", null, { role: "admin" })}>+ Add Admin</button></div>;
+
+    return <div className="admin-panel-card">
+      <div className="admin-list-head"><div><h3>{sectionTitles[active]}</h3><p>Changes are saved to MongoDB and used by the student, teacher, and landing pages.</p></div>{addButton()}</div>
+      <div className="admin-search-row"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search this section..."/><button onClick={loadAll}>Refresh</button></div>
+      <div className="admin-table-wrap"><table className="admin-data-table"><thead>{renderHeaders()}</thead><tbody>{currentRows.map(renderRow)}{currentRows.length === 0 && <tr><td colSpan="8" className="admin-empty">No records found.</td></tr>}</tbody></table></div>
+    </div>;
+  }
+
+  function renderHeaders() {
+    if (["students", "teachers", "admins", "account"].includes(active)) return <tr><th>Name</th><th>Email</th><th>Role</th><th>Phone</th><th>Actions</th></tr>;
+    if (active === "streams") return <tr><th>Stream</th><th>Sinhala</th><th>Description</th><th>Actions</th></tr>;
+    if (active === "subjects") return <tr><th>Subject</th><th>Stream</th><th>Code</th><th>Actions</th></tr>;
+    if (active === "lessons") return <tr><th>Lesson</th><th>Subject</th><th>Video</th><th>Notes</th><th>Actions</th></tr>;
+    if (active === "videos") return <tr><th>Video</th><th>Lesson</th><th>URL</th><th>Actions</th></tr>;
+    if (active === "notes") return <tr><th>Note</th><th>Lesson</th><th>File</th><th>Actions</th></tr>;
+    if (active === "pastPapers") return <tr><th>Paper</th><th>Type</th><th>Year</th><th>Subject</th><th>Actions</th></tr>;
+    if (active === "questions") return <tr><th>Question</th><th>Type</th><th>Year</th><th>Lesson</th><th>Actions</th></tr>;
+    return <tr><th>Title</th><th>Teacher</th><th>Subject</th><th>Status</th><th>Schedule</th><th>Actions</th></tr>;
+  }
+
+  function renderRow(item) {
+    const key = idOf(item);
+    const actions = (type) => <div className="admin-actions"><button onClick={() => openModal(type, "edit", item)}>Edit</button><button className="danger" onClick={() => removeItem(type, item)}>Delete</button></div>;
+    if (["students", "teachers", "admins", "account"].includes(active)) return <tr key={key}><td>{item.name}</td><td>{item.email}</td><td><span className="admin-badge">{item.role}</span></td><td>{item.phone || "-"}</td><td>{actions("user")}</td></tr>;
+    if (active === "streams") return <tr key={key}><td>{item.icon} {item.name}</td><td>{item.sinhalaName || "-"}</td><td>{item.description || "-"}</td><td>{actions("stream")}</td></tr>;
+    if (active === "subjects") return <tr key={key}><td>{item.icon} {item.name}</td><td>{relationName(item, "stream")}</td><td>{item.code || "-"}</td><td>{actions("subject")}</td></tr>;
+    if (active === "lessons") return <tr key={key}><td>{item.title}</td><td>{relationName(item, "subject")}</td><td>{item.videoLink || item.videoUrl ? "Added" : (item.videos?.length || 0)}</td><td>{item.notesUrl ? "Added" : item.notesCount || 0}</td><td>{actions("lesson")}</td></tr>;
+    if (active === "videos") return <tr key={key}><td>{item.title}</td><td>{item.lessonTitle}</td><td className="admin-url-cell">{item.url || "-"}</td><td>{actions("video")}</td></tr>;
+    if (active === "notes") return <tr key={key}><td>{item.title}</td><td>{relationName(item, "lesson")}</td><td className="admin-url-cell">{item.fileUrl || "-"}</td><td>{actions("note")}</td></tr>;
+    if (active === "pastPapers") return <tr key={key}><td>{item.title}</td><td>{item.paperType}</td><td>{item.examYear}</td><td>{relationName(item, "subject")}</td><td>{actions("pastPaper")}</td></tr>;
+    if (active === "questions") return <tr key={key}><td>{String(item.prompt || "").slice(0, 80)}</td><td>{item.questionType}</td><td>{item.examYear}</td><td>{relationName(item, "lesson")}</td><td>{actions("question")}</td></tr>;
+    return <tr key={key}><td>{item.title}</td><td>{relationName(item, "teacher")}</td><td>{item.subject}</td><td><span className={`admin-status ${item.status}`}>{item.status}</span></td><td>{item.schedule || "-"}</td><td><div className="admin-actions">{item.status === "pending" && <><button onClick={() => reviewPost(item, "approved")}>Approve</button><button onClick={() => reviewPost(item, "rejected")}>Reject</button></>}<button className="danger" onClick={() => removeItem("post", item)}>Delete</button></div></td></tr>;
+  }
+
+  function renderModalFields() {
+    const type = modal.type;
+    if (type === "stream") return <><Field label="Stream name" name="name" required/><Field label="Sinhala name" name="sinhalaName"/><Field label="Description" name="description" textarea/><Field label="Code" name="code"/><Field label="Icon" name="icon"/><Field label="Color" name="color" type="color"/><Field label="Order" name="order" type="number"/></>;
+    if (type === "subject") return <><Field label="Subject name" name="name" required/><Field label="Sinhala name" name="sinhalaName"/><SelectField label="Stream" name="streamId" required options={streams.map(s => [idOf(s), s.name])}/><Field label="Code" name="code"/><Field label="Icon" name="icon"/><Field label="Color" name="color" type="color"/><Field label="Order" name="order" type="number"/></>;
+    if (type === "lesson") return <><Field label="Lesson title" name="title" required/><Field label="Sinhala title" name="sinhalaTitle"/><SelectField label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), `${s.name} (${relationName(s, "stream")})`])}/><Field label="Description" name="description" textarea/><Field label="Main video title" name="videoTitle"/><Field label="Main video URL" name="videoLink"/><Field label="Notes URL" name="notesUrl"/><Field label="MCQ paper URL" name="pastPaperMcqUrl"/><Field label="Structured paper URL" name="pastPaperStructuredUrl"/><Field label="Essay paper URL" name="pastPaperEssayUrl"/><Field label="Duration minutes" name="durationMinutes" type="number"/><Field label="Order" name="order" type="number"/></>;
+    if (type === "video") return <><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><Field label="Video title" name="title" required/><Field label="Video URL" name="url" required/><Field label="Duration" name="duration"/><Field label="Description" name="description" textarea/></>;
+    if (type === "note") return <><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><SelectField label="Subject" name="subjectId" options={subjects.map(s => [idOf(s), s.name])}/><Field label="Note title" name="title" required/><Field label="File URL" name="fileUrl"/><Field label="Description" name="description" textarea/><Field label="Pages" name="pages" type="number"/><Field label="File size" name="fileSize"/><Field label="Order" name="order" type="number"/></>;
+    if (type === "pastPaper") return <><Field label="Paper title" name="title" required/><SelectField label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), s.name])}/><SelectField label="Lesson" name="lessonId" options={[["", "No lesson"], ...lessons.map(l => [idOf(l), l.title])]}/><SelectField label="Paper type" name="paperType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"], ["full", "Full paper"]]}/><Field label="Exam year" name="examYear" type="number"/><Field label="File URL" name="fileUrl"/><Field label="Section" name="section"/><Field label="Questions count" name="questionsCount" type="number"/><Field label="Duration minutes" name="durationMinutes" type="number"/><SelectField label="Difficulty" name="difficulty" options={[["Easy", "Easy"], ["Medium", "Medium"], ["Hard", "Hard"]]}/></>;
+    if (type === "question") return <><SelectField label="Question type" name="questionType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"]]}/><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><Field label="Question" name="prompt" required textarea/><Field label="Options (one per line for MCQ)" name="options" textarea/><Field label="Correct option index (0=A, 1=B, 2=C)" name="correctOptionIndex" type="number"/><Field label="Explanation" name="explanation" textarea/><Field label="Max marks" name="maxMarks" type="number"/><Field label="Exam year" name="examYear" type="number"/><Field label="Source label" name="sourceLabel"/></>;
+    if (type === "user") return <><Field label="Name" name="name" required/><Field label="Email" name="email" type="email" required/><Field label={modal.mode === "edit" ? "New password (optional)" : "Password"} name="password" type="password" required={modal.mode !== "edit"}/><Field label="Phone" name="phone"/><SelectField label="Role" name="role" options={[["student", "Student"], ["teacher", "Teacher"], ["admin", "Admin"]]}/><Field label="Stream" name="stream"/><Field label="Subject" name="subject"/></>;
+    return null;
+  }
+
+  function Field({ label, name, type = "text", textarea = false, required = false }) {
+    return <label className="admin-field"><span>{label}</span>{textarea ? <textarea value={form[name] || ""} onChange={(e) => change(name, e.target.value)} required={required}/> : <input type={type} value={form[name] ?? ""} onChange={(e) => change(name, e.target.value)} required={required}/>}</label>;
+  }
+
+  function SelectField({ label, name, options = [], required = false }) {
+    return <label className="admin-field"><span>{label}</span><select value={form[name] ?? ""} onChange={(e) => change(name, e.target.value)} required={required}><option value="">Select</option>{options.map(([value, labelText]) => <option value={value} key={`${name}-${value}`}>{labelText}</option>)}</select></label>;
+  }
+
+  return <div className="admin-shell-v2">
+    <aside className={`admin-sidebar-v2 ${mobileOpen ? "open" : ""}`}>
+      <div className="admin-brand-v2"><div className="brand-orb">LH</div><div><strong>Learning Hub</strong><span>Admin Console</span></div></div>
+      <nav className="admin-nav-v2">{groups.map(group => <div key={group.id} className="admin-nav-group"><button className="admin-nav-parent" onClick={() => group.items.length === 1 ? setActive(group.items[0].id) : toggleGroup(group.id)}><span>{group.icon}</span><b>{group.label}</b><em>{openGroups[group.id] || group.items.length === 1 ? "⌃" : "⌄"}</em></button>{(openGroups[group.id] || group.items.length === 1) && <div className="admin-nav-children">{group.items.map(item => <button key={item.id} className={active === item.id ? "active" : ""} onClick={() => { setActive(item.id); setMobileOpen(false); setSearch(""); }}>{item.label}</button>)}</div>}</div>)}</nav>
+      <div className="admin-profile-box"><div className="admin-avatar">{adminName?.charAt(0)?.toUpperCase() || "A"}</div><div><strong>{adminName}</strong><span>Administrator</span></div><button onClick={onLogout}>Logout</button></div>
+    </aside>
+
+    <main className="admin-main-v2">
+      <div className="admin-top-v2"><button className="admin-menu-toggle" onClick={() => setMobileOpen(true)}>☰</button><div><p>Admin Workspace</p><h1>{sectionTitles[active]}</h1></div><button className="admin-refresh" onClick={loadAll}>{loading ? "Loading..." : "Refresh"}</button></div>
+      {message && <div className="admin-message">{message}</div>}
+      {renderTable()}
+    </main>
+
+    {modal.open && <div className="admin-modal-backdrop"><form className="admin-modal-card" onSubmit={saveForm}><div className="admin-modal-head"><div><p>{modal.mode === "edit" ? "Edit" : "Create"}</p><h2>{modal.type}</h2></div><button type="button" onClick={closeModal}>×</button></div><div className="admin-form-grid">{renderModalFields()}</div><div className="admin-modal-actions"><button type="button" onClick={closeModal}>Cancel</button><button className="admin-primary" type="submit">{modal.mode === "edit" ? "Update" : "Save"}</button></div></form></div>}
+  </div>;
 }
 
 export default AdminPanel;
