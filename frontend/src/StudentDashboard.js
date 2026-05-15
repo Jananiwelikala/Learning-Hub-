@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import "./App.css";
 import styles from "./StudentDashboard.module.css";
 import {
@@ -13,9 +13,11 @@ import {
   getVirtualPaperQuestions,
   submitStudentMcqs,
   sendStudentChatMessage,
+  getStreams,
   getSubjects,
   getSubjectLessons,
   getQuestionsForLesson,
+  updateStudentProfile,
 } from "./api";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
@@ -55,6 +57,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   const [structuredError, setStructuredError] = useState("");
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [classPosts, setClassPosts] = useState([]);
+  const [streamOptions, setStreamOptions] = useState([]);
   const [studentSubjectRecords, setStudentSubjectRecords] = useState([]);
   const [activeSubjectRecords, setActiveSubjectRecords] = useState([]);
   const [studentLessonRecords, setStudentLessonRecords] = useState([]);
@@ -74,6 +77,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     email: studentData?.email || "student@example.com",
     phone: studentData?.phone || "07XXXXXXXX",
     stream: studentData?.stream || "Bio Science",
+    streamId: studentData?.streamId || "",
     alYear: studentData?.alYear || "2026 A/L",
     joinedDate: studentData?.joinedDate || "May 2025",
     // Dashboard specific data
@@ -91,10 +95,18 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   // Load approved class posts on component mount
   useEffect(() => {
     loadClassPosts();
+    loadStreams();
     loadStudentSubjects();
     loadOngoingLessons();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadStreams() {
+    const result = await getStreams();
+    if (result.success) {
+      setStreamOptions(result.streams || []);
+    }
+  }
 
   async function loadStudentSubjects() {
     const token = localStorage.getItem("token");
@@ -175,6 +187,36 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     return () => clearInterval(interval);
   }, [searchFilters]);
 
+  const loadPastPapers = useCallback(async (lessonId) => {
+    if (!lessonId) {
+      console.log('loadPastPapers: no lessonId provided');
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log('loadPastPapers: no token');
+      return;
+    }
+
+    console.log('loadPastPapers: calling API with', { lessonId, year: selectedPaperYear, type: selectedPaperType });
+
+    setPapersLoading(true);
+    setPapersError("");
+
+    const result = await getStudentLessonPastPapers(token, lessonId, selectedPaperYear, selectedPaperType);
+    console.log('loadPastPapers: API result', result);
+
+    if (result.success) {
+      setCurrentPapers(result.pastPapers || []);
+      console.log('loadPastPapers: set papers', result.pastPapers?.length || 0);
+    } else {
+      setPapersError(result.error || "Failed to load past papers.");
+      setCurrentPapers([]);
+    }
+    setPapersLoading(false);
+  }, [selectedPaperYear, selectedPaperType]);
+
   // Load past papers when lesson or filters change
   useEffect(() => {
     const lessonId = selectedLearningLesson?.rawLesson?._id || selectedLearningLesson?.id;
@@ -182,7 +224,20 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     if (lessonId) {
       loadPastPapers(lessonId);
     }
-  }, [selectedLearningLesson, selectedPaperYear, selectedPaperType]);
+  }, [selectedLearningLesson, selectedPaperYear, selectedPaperType, loadPastPapers]);
+
+  useEffect(() => {
+    if (!selectedClassPost) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSelectedClassPost(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedClassPost]);
 
   const motivationText = "Stay focused. Small daily progress leads to big A/L results.";
   const getColomboGreeting = () => {
@@ -199,39 +254,42 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
   };
   const dashboardGreeting = `${getColomboGreeting()}, ${student.name.split(" ")[0] || student.name}!`;
   const motivationSinhala = "අද ඔබ තබන සෑම කුඩා පියවරක්ම, හෙට ඔබේ විශිෂ්ට ජයග්‍රහණයට පදනමයි.";
-  const alExamDate = new Date("2026-11-25"); // Sample A/L Exam Date
+  const examYear = Number(String(student.alYear || "").match(/\d{4}/)?.[0]) || new Date().getFullYear();
+  const alExamDate = new Date(examYear, 7, 1); // A/L exams are treated as August every year.
+  const examDateLabel = `1 August ${examYear}`;
+  const studentStreamLabel = student.stream || "your stream";
   const today = new Date();
-  const daysLeft = Math.ceil((alExamDate - today) / (1000 * 60 * 60 * 24));
+  const daysLeft = Math.max(0, Math.ceil((alExamDate - today) / (1000 * 60 * 60 * 24)));
 
   const latestNews = [
     {
       id: 1,
-      title: "2026 A/L timetable expected to be released next month",
-      sinhala: "2026 A/L කාලසටහන ලබන මාසයේ නිකුත් වේ",
+      title: `${examYear} A/L exam countdown updated for August`,
+      sinhala: `${examYear} A/L අගෝස්තු විභාග ගණනය යාවත්කාලීන කර ඇත`,
       tag: "Exam",
-      date: "Apr 20, 2026",
+      date: "Today",
       details:
-        "The official 2026 A/L timetable is expected soon. Students should keep revision plans flexible and continue covering syllabus units while waiting for the confirmed dates.",
+        `Your dashboard is now counting down to ${examDateLabel}. Keep revision targets aligned with your ${student.alYear || `${examYear} A/L`} plan.`,
       sinhalaDetails:
-        "2026 A/L කාලසටහන ඉදිරියේදී නිකුත් වීමට නියමිතයි. නිල දිනයන් එන තුරු syllabus පාඩම් සහ revision සැලැස්ම අඛණ්ඩව කරගෙන යන්න.",
+        `${examYear} A/L ගණනය ${examDateLabel} දක්වා යාවත්කාලීන කර ඇත. ඔබේ revision සැලැස්ම exam year එකට ගැලපෙන ලෙස තබාගන්න.`,
     },
     {
       id: 2,
-      title: "Science stream revision seminar announced for May 2026",
-      sinhala: "විද්‍යා ධාරා සංශෝධන සම්මන්ත්‍රණයක් 2026 මැයි මසදී",
+      title: `${studentStreamLabel} revision plan for ${student.alYear || `${examYear} A/L`}`,
+      sinhala: `${studentStreamLabel} ධාරාව සඳහා ${student.alYear || `${examYear} A/L`} revision සැලැස්ම`,
       tag: "Seminar",
-      date: "Apr 18, 2026",
+      date: "Updated",
       details:
-        "A revision seminar for science stream students is planned for May 2026. Focus areas include Physics, Chemistry and Biology theory recap with past paper practice.",
+        `Focus recommendations are adjusted for ${studentStreamLabel} students preparing for ${student.alYear || `${examYear} A/L`}.`,
       sinhalaDetails:
-        "විද්‍යා ධාරා සිසුන් සඳහා මැයි 2026 සංශෝධන සම්මන්ත්‍රණයක් සැලසුම් කර ඇත. Physics, Chemistry, Biology theory සහ past paper practice ප්‍රධාන කරුණු වේ.",
+        `${studentStreamLabel} ධාරාවේ ${student.alYear || `${examYear} A/L`} සිසුන් සඳහා revision අරමුණු ගැලපෙන ලෙස සකසා ඇත.`,
     },
     {
       id: 3,
-      title: "Department releases updated past paper guidance for 2026",
-      sinhala: "දෙපාර්තමේන්තුව 2026 සඳහා නවතම මාර්ගෝපදේශ නිකුත් කරයි",
+      title: `Past paper practice guidance for ${student.alYear || `${examYear} A/L`}`,
+      sinhala: `${examYear} සඳහා past paper practice මාර්ගෝපදේශ`,
       tag: "Update",
-      date: "Apr 15, 2026",
+      date: "Updated",
       details:
         "Updated past paper guidance helps students understand how to practice recent papers, identify weak areas and improve answer timing before the A/L exam.",
       sinhalaDetails:
@@ -242,7 +300,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       title: "Biology practical revision notes updated",
       sinhala: "Biology practical revision සටහන් යාවත්කාලීන කර ඇත",
       tag: "Biology",
-      date: "Apr 12, 2026",
+      date: "Updated",
       details:
         "New Biology practical revision notes are available with diagrams, key observations and common exam-style questions for quick practice.",
       sinhalaDetails:
@@ -253,7 +311,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       title: "Combined Maths model paper discussion added",
       sinhala: "Combined Maths model paper සාකච්ඡාවක් එක් කර ඇත",
       tag: "Maths",
-      date: "Apr 10, 2026",
+      date: "Updated",
       details:
         "A new Combined Maths model paper discussion is added to help students improve problem-solving speed and identify repeated question patterns.",
       sinhalaDetails:
@@ -264,7 +322,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       title: "Chemistry organic reactions short notes released",
       sinhala: "Chemistry organic reactions කෙටි සටහන් නිකුත් කර ඇත",
       tag: "Chemistry",
-      date: "Apr 08, 2026",
+      date: "Updated",
       details:
         "Short notes for organic reaction mechanisms are now available with summary tables and important conversion paths.",
       sinhalaDetails:
@@ -275,7 +333,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       title: "Physics mechanics MCQ practice set updated",
       sinhala: "Physics mechanics MCQ පුහුණු ප්‍රශ්න යාවත්කාලීන කර ඇත",
       tag: "Physics",
-      date: "Apr 05, 2026",
+      date: "Updated",
       details:
         "The mechanics MCQ practice set now includes more exam-focused questions with instant answer checking and feedback.",
       sinhalaDetails:
@@ -286,11 +344,11 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       title: "Accounting final accounts revision class announced",
       sinhala: "Accounting final accounts revision පන්තියක් නිවේදනය කර ඇත",
       tag: "Commerce",
-      date: "Apr 02, 2026",
+      date: "Updated",
       details:
-        "A focused revision class for final accounts has been announced for commerce students preparing for the 2026 A/L exam.",
+        `A focused revision class for final accounts has been announced for commerce students preparing for the ${student.alYear || `${examYear} A/L`} exam.`,
       sinhalaDetails:
-        "2026 A/L සඳහා සූදානම් වන Commerce සිසුන්ට final accounts පිළිබඳ focused revision පන්තියක් නිවේදනය කර ඇත.",
+        `${examYear} A/L සඳහා සූදානම් වන Commerce සිසුන්ට final accounts පිළිබඳ focused revision පන්තියක් නිවේදනය කර ඇත.`,
     },
   ];
 
@@ -301,36 +359,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     return Date.now() - timestamp <= days * 24 * 60 * 60 * 1000;
   };
 
-  const classUpdateCount = classPosts.filter((post) =>
-    isRecentNotification(post.updatedAt || post.createdAt) && currentSubjectSet.has(post.subject)
-  ).length;
   const subjectUpdateCount = latestNews.filter((item) => item.tag === "Update").length;
-  const notificationItems = [
-    ...classPosts
-      .filter((post) => isRecentNotification(post.updatedAt || post.createdAt))
-      .filter((post) => currentSubjectSet.has(post.subject))
-      .slice(0, 5)
-      .map((post) => ({
-        id: `class-${post._id || post.id}`,
-        type: "Class Update",
-        title: post.title || "New class details updated",
-        text: `${post.subject || "Subject"} class details updated`,
-        date: post.updatedAt || post.createdAt,
-      })),
-    ...latestNews
-      .filter((item) => item.tag === "Update")
-      .map((item) => ({
-        id: `subject-${item.id}`,
-        type: "Subject Update",
-        title: item.title,
-        text: item.sinhala || "Subject details updated",
-        date: item.date,
-      })),
-  ];
-  const notificationCount = settings.notifications
-    ? classUpdateCount + subjectUpdateCount
-    : 0;
-  const notificationBadgeText = notificationCount > 99 ? "99+" : String(notificationCount);
 
   const ongoingLessons = [];
 
@@ -477,13 +506,33 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     },
   };
 
+  const normalizeName = (value) => String(value || "").trim().toLowerCase();
+  const streamAliases = {
+    science: "bio science",
+    biology: "bio science",
+    "biology stream": "bio science",
+    mathematics: "physical science",
+    maths: "physical science",
+    "mathematics stream": "physical science",
+  };
+  const normalizedStudentStream = streamAliases[normalizeName(student.stream)] || normalizeName(student.stream);
+  const selectedStreamRecord = streamOptions.find((item) =>
+    String(item._id || item.id) === String(student.streamId) ||
+    normalizeName(item.name) === normalizedStudentStream
+  );
+  const selectedStreamOptionId = selectedStreamRecord?._id || selectedStreamRecord?.id || student.streamId || "";
   const selectedStream = streamSubjectMap[student.stream]
     ? student.stream
     : student.stream === "Science"
       ? "Bio Science"
-      : "Bio Science";
-  const currentStream = streamSubjectMap[selectedStream];
-  const normalizeName = (value) => String(value || "").trim().toLowerCase();
+      : selectedStreamRecord?.name || student.stream || "Bio Science";
+  const currentStream = streamSubjectMap[selectedStream] || {
+    title: selectedStreamRecord?.name || selectedStream,
+    sinhala: selectedStreamRecord?.sinhalaName || "",
+    icon: selectedStreamRecord?.icon || "",
+    color: selectedStreamRecord?.color || "teal",
+    subjects: [],
+  };
   const getMcqOptionLabel = (option, index) =>
     typeof option === "object" ? String(option.label ?? option.value ?? index + 1) : String(index + 1);
   const getMcqOptionText = (option) =>
@@ -526,6 +575,38 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     };
   });
   const currentSubjectSet = new Set(currentSubjects.map((subject) => subject.name));
+
+  const classUpdateCount = classPosts.filter((post) =>
+    isRecentNotification(post.updatedAt || post.createdAt) && currentSubjectSet.has(post.subject)
+  ).length;
+
+  const notificationItems = [
+    ...classPosts
+      .filter((post) => isRecentNotification(post.updatedAt || post.createdAt))
+      .filter((post) => currentSubjectSet.has(post.subject))
+      .slice(0, 5)
+      .map((post) => ({
+        id: `class-${post._id || post.id}`,
+        type: "Class Update",
+        title: post.title || "New class details updated",
+        text: `${post.subject || "Subject"} class details updated`,
+        date: post.updatedAt || post.createdAt,
+      })),
+    ...latestNews
+      .filter((item) => item.tag === "Update")
+      .map((item) => ({
+        id: `subject-${item.id}`,
+        type: "Subject Update",
+        title: item.title,
+        text: item.sinhala || "Subject details updated",
+        date: item.date,
+      })),
+  ];
+
+  const notificationCount = settings.notifications
+    ? classUpdateCount + subjectUpdateCount
+    : 0;
+  const notificationBadgeText = notificationCount > 99 ? "99+" : String(notificationCount);
   const subjectIconMap = {
     physics: "⚛",
     atom: "⚛",
@@ -821,7 +902,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     "2024 Combined Maths Paper",
   ];
 
-  const paperSubjectOptions = [
+  const paperSubjectOptions = useMemo(() => [
     "All",
     ...new Set(
       [
@@ -829,7 +910,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         ...studentSubjectRecords.map((subject) => subject.name || subject.subject || subject.title).filter(Boolean),
       ]
     ),
-  ];
+  ], [currentPapers, studentSubjectRecords]);
 
   const filteredCurrentPapers = currentPapers.filter((paper) => {
     if (selectedPaperSubject === "All") return true;
@@ -1137,36 +1218,6 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     loadPastPapers(lessonId); // Load past papers for the selected lesson
   }
 
-  async function loadPastPapers(lessonId) {
-    if (!lessonId) {
-      console.log('loadPastPapers: no lessonId provided');
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      console.log('loadPastPapers: no token');
-      return;
-    }
-
-    console.log('loadPastPapers: calling API with', { lessonId, year: selectedPaperYear, type: selectedPaperType });
-
-    setPapersLoading(true);
-    setPapersError("");
-
-    const result = await getStudentLessonPastPapers(token, lessonId, selectedPaperYear, selectedPaperType);
-    console.log('loadPastPapers: API result', result);
-
-    if (result.success) {
-      setCurrentPapers(result.pastPapers || []);
-      console.log('loadPastPapers: set papers', result.pastPapers?.length || 0);
-    } else {
-      setPapersError(result.error || "Failed to load past papers");
-      setCurrentPapers([]);
-    }
-    setPapersLoading(false);
-  }
-
   async function handleSendAiMessage(nextMessage) {
     const message = String(nextMessage ?? aiInput).trim();
     if (!message || aiLoading) return;
@@ -1199,12 +1250,16 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         },
       ]);
     } else {
-      setAiError(result.error || "Failed to send your question.");
+      const sessionError = result.status === 401 || result.status === 403;
+      const errorText = sessionError
+        ? "Your login session is not authorized for student chat. Please logout and login again as a student."
+        : result.error || "Failed to send your question.";
+      setAiError("");
       setAiMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          text: "Sorry, I could not send that question. Please try again.",
+          text: errorText,
         },
       ]);
     }
@@ -1236,6 +1291,33 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
     }
   }
 
+  async function saveStudentSettings() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please login again to save profile changes.");
+      return;
+    }
+
+    const result = await updateStudentProfile(token, {
+      name: student.name,
+      email: student.email,
+      phone: student.phone,
+      stream: student.stream,
+      streamId: student.streamId,
+      alYear: student.alYear,
+    });
+
+    if (!result.success) {
+      alert(result.error || "Failed to save profile changes.");
+      return;
+    }
+
+    setStudent((prev) => ({ ...prev, ...(result.profile || {}) }));
+    await loadStudentSubjects();
+    await loadOngoingLessons();
+    alert("Settings saved successfully!");
+  }
+
   // Kept as a fallback while the compact dashboard design is active.
   // eslint-disable-next-line no-unused-vars
   const renderHome = () => (
@@ -1250,7 +1332,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
       <div className="home-top-grid">
         <div className="dashboard-card countdown-card">
           <h3>ඔබේ විභාග සූදානම</h3>
-          <p className="exam-date">Date: {alExamDate.toDateString()}</p>
+          <p className="exam-date">Date: {examDateLabel}</p>
           <p className="days-left"><strong>{daysLeft}</strong> Days Left</p>
         </div>
 
@@ -1392,7 +1474,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <span>Days Left / දින ඉතිරි</span>
           </div>
           <div className="detail-list">
-            <p><span>Exam Date</span><strong>25 November 2026</strong></p>
+            <p><span>Exam Date</span><strong>{examDateLabel}</strong></p>
             <p><span>Stream</span><strong>{selectedStream}</strong></p>
             <p><span>Subjects</span><strong>{currentSubjectNames}</strong></p>
           </div>
@@ -2312,14 +2394,19 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
       {/* Class Post Detail Modal */}
       {selectedClassPost && (
-        <div className="modal-overlay" onClick={() => setSelectedClassPost(null)}>
+        <div className="modal-overlay class-post-modal-overlay" onClick={() => setSelectedClassPost(null)}>
           <div className="modal-content premium-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title">
                 <h3>{selectedClassPost.subject}</h3>
                 <h2>{selectedClassPost.title}</h2>
               </div>
-              <button className="modal-close" onClick={() => setSelectedClassPost(null)}>
+              <button
+                className="modal-close"
+                type="button"
+                aria-label="Close class post"
+                onClick={() => setSelectedClassPost(null)}
+              >
                 ✕
               </button>
             </div>
@@ -2444,14 +2531,25 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
             <label>Study Stream</label>
             <div className="input-wrap select-wrap">
               <select
-                value={student.stream}
-                onChange={(e) => handleUpdateProfile("stream", e.target.value)}
+                value={selectedStreamOptionId}
+                onChange={(e) => {
+                  const selected = streamOptions.find((item) => String(item._id || item.id) === e.target.value);
+                  setStudent((prev) => ({
+                    ...prev,
+                    streamId: e.target.value,
+                    stream: selected?.name || "",
+                  }));
+                  setSelectedSubject(null);
+                  setSelectedLearningLesson(null);
+                  setStudentLessonRecords([]);
+                }}
               >
-                <option value="Bio Science">Bio Science</option>
-                <option value="Physical Science">Physical Science</option>
-                <option value="Commerce">Commerce</option>
-                <option value="Arts">Arts</option>
-                <option value="Technology">Technology</option>
+                <option value="">Choose stream</option>
+                {streamOptions.map((item) => (
+                  <option key={item._id || item.id} value={item._id || item.id}>
+                    {item.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -2515,7 +2613,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           <button
             type="button"
             className="btn solid"
-            onClick={() => alert("Settings saved successfully!")}
+            onClick={saveStudentSettings}
           >
             Save Changes
           </button>
@@ -2538,17 +2636,33 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
 
       <div className="ai-chat-screen-body">
         {aiMessages.map((chatMessage, index) => (
-          <p
+          <div
             key={`${chatMessage.role}-${index}`}
             className={chatMessage.role === "user" ? "ai-user-message" : "ai-assistant-message"}
           >
-            {renderChatText(chatMessage.text)}
-          </p>
+            <span className="ai-message-label">
+              {chatMessage.role === "user" ? "You" : "Learning Hub AI"}
+            </span>
+            <p>{renderChatText(chatMessage.text)}</p>
+          </div>
         ))}
-        {aiLoading && <p className="ai-assistant-message">Preparing answer...</p>}
-        {aiError && <p className="ai-error-message">{aiError}</p>}
+        {aiLoading && (
+          <div className="ai-assistant-message ai-loading-message">
+            <span className="ai-message-label">Learning Hub AI</span>
+            <p>Preparing answer...</p>
+          </div>
+        )}
+        {aiError && (
+          <div className="ai-error-message">
+            <span className="ai-message-label">Notice</span>
+            <p>{aiError}</p>
+          </div>
+        )}
         {aiMessages.length === 0 && (
-          <p className="ai-assistant-message">Ayubowan! Ask about your A/L subjects, lessons, or weak areas.</p>
+          <div className="ai-assistant-message">
+            <span className="ai-message-label">Learning Hub AI</span>
+            <p>Ayubowan! Ask about your A/L subjects, lessons, or weak areas.</p>
+          </div>
         )}
       </div>
 
@@ -2768,7 +2882,7 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
         <p className="footer-copy">© 2026 Learning Hub. All rights reserved.</p>
       </footer>
 
-      {showAiBubble && (
+      {showAiBubble && activeView !== "chat" && (
         <button
           className="ai-floating-btn"
           onClick={() => setShowAiPanel((prev) => !prev)}
@@ -4148,8 +4262,70 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           overflow-y: auto;
           padding: 24px;
           border-radius: 18px;
-          background: #f8fafc;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.74), rgba(248,250,252,0.94)),
+            #f8fafc;
           border: 1px solid #e2e8f0;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          scroll-behavior: smooth;
+        }
+
+        .ai-chat-screen-body .ai-user-message,
+        .ai-chat-screen-body .ai-assistant-message,
+        .ai-chat-screen-body .ai-error-message {
+          max-width: min(760px, 86%);
+          padding: 12px 14px;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .ai-chat-screen-body .ai-user-message {
+          align-self: flex-end;
+          background: #2563eb;
+          border-color: #2563eb;
+          color: #ffffff;
+          border-bottom-right-radius: 6px;
+        }
+
+        .ai-chat-screen-body .ai-assistant-message {
+          align-self: flex-start;
+          background: #ffffff;
+          color: #0f172a;
+          border-bottom-left-radius: 6px;
+        }
+
+        .ai-chat-screen-body .ai-error-message {
+          align-self: center;
+          background: #fff1f2;
+          border-color: #fecaca;
+          color: #991b1b;
+        }
+
+        .ai-chat-screen-body .ai-message-label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0;
+          color: #64748b;
+        }
+
+        .ai-chat-screen-body .ai-user-message .ai-message-label {
+          color: rgba(255,255,255,0.8);
+        }
+
+        .ai-chat-screen-body p {
+          margin: 0;
+          line-height: 1.68;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+
+        .ai-chat-screen-body strong {
+          font-weight: 900;
         }
 
         .ai-chat-screen-input {
@@ -4168,6 +4344,12 @@ function StudentDashboard({ onLogout, onBackHome, studentData }) {
           border-radius: 12px;
           padding: 0 16px;
           font: inherit;
+          outline: none;
+        }
+
+        .ai-chat-screen-input input:focus {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
         }
 
         .ai-chat-screen-input button {

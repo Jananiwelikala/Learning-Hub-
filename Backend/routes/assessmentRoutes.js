@@ -36,7 +36,7 @@ router.get(
 router.post(
   "/submit-descriptive",
   auth,
-  roleMiddleware(["student", "teacher", "admin"]),
+  roleMiddleware("student"),
   async (req, res) => {
     try {
       const { lessonId, submissions } = req.body;
@@ -151,7 +151,7 @@ router.get(
 router.post(
   "/mcq/submit",
   auth,
-  roleMiddleware(["student", "teacher", "admin"]),
+  roleMiddleware("student"),
   async (req, res) => {
     try {
       const { lessonId, questionId, selectedOptionIndex } = req.body;

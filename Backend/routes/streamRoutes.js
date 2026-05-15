@@ -10,7 +10,7 @@ const router = express.Router();
 // PUBLIC: list streams
 router.get("/", async (req, res) => {
   try {
-    const streams = await Stream.find().sort({ createdAt: -1 });
+    const streams = await Stream.find().sort({ order: 1, name: 1, createdAt: -1 });
     res.json(streams);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -20,8 +20,8 @@ router.get("/", async (req, res) => {
 // ADMIN: create stream
 router.post("/", auth, roleMiddleware("admin"), async (req, res) => {
   try {
-    const { name, description } = req.body;
-    const stream = await Stream.create({ name, description });
+    const { name, description, sinhalaName, code, icon, color, order } = req.body;
+    const stream = await Stream.create({ name, description, sinhalaName, code, icon, color, order });
     res.status(201).json(stream);
   } catch (err) {
     res.status(400).json({ message: err.message });

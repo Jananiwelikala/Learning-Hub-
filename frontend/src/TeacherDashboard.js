@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import {
   getTeacherPosts,
   createClassPost,
@@ -38,6 +38,7 @@ const emptyPostForm = {
 };
 
 const emptyProfile = {
+  title: "",
   name: "",
   email: "",
   phone: "",
@@ -64,6 +65,11 @@ function getInitials(name = "") {
   return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 }
 
+function getDisplayName(profile = {}, fallback = "Teacher") {
+  const name = profile.name || fallback;
+  return [profile.title, name].filter(Boolean).join(" ");
+}
+
 function TeacherDashboard({ teacherName, onLogout }) {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -84,18 +90,17 @@ function TeacherDashboard({ teacherName, onLogout }) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [formState, setFormState] = useState(emptyPostForm);
   const [editingPostId, setEditingPostId] = useState(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingPost, setSavingPost] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadTeacherData();
-  }, []);
-
-  async function loadTeacherData() {
-    setLoading(true);
-    setError(null);
+  const loadTeacherData = useCallback(async (options = {}) => {
+    if (!options.silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       const token = localStorage.getItem("token");
@@ -104,7 +109,9 @@ function TeacherDashboard({ teacherName, onLogout }) {
       if (profileResult.success) {
         const updatedProfile = { ...emptyProfile, ...profileResult.user };
         setProfile(updatedProfile);
-        setProfileForm(updatedProfile);
+        if (!options.silent && !isEditingProfile) {
+          setProfileForm(updatedProfile);
+        }
         localStorage.setItem("user", JSON.stringify(profileResult.user));
       }
 
@@ -122,9 +129,26 @@ function TeacherDashboard({ teacherName, onLogout }) {
     } catch (err) {
       setError("Network error occurred. Please try again.");
     } finally {
-      setLoading(false);
+      if (!options.silent) {
+        setLoading(false);
+      }
     }
-  }
+  }, [isEditingProfile]);
+
+  useEffect(() => {
+    loadTeacherData();
+  }, [loadTeacherData]);
+
+  useEffect(() => {
+    const refreshTeacherPosts = () => loadTeacherData({ silent: true });
+    const intervalId = window.setInterval(refreshTeacherPosts, 15000);
+
+    window.addEventListener("focus", refreshTeacherPosts);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshTeacherPosts);
+    };
+  }, [loadTeacherData]);
 
   const stats = useMemo(
     () => ({
@@ -272,8 +296,9 @@ function TeacherDashboard({ teacherName, onLogout }) {
       setProfile(updatedProfile);
       setProfileForm(updatedProfile);
       localStorage.setItem("user", JSON.stringify(result.user));
+      setIsEditingProfile(false);
       alert("Profile updated successfully.");
-      setActiveSection("dashboard");
+      setActiveSection("profile");
     } else {
       alert("Error: " + result.error);
     }
@@ -320,7 +345,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
       <>
         <section className="teacher-hero-card">
           <div className="teacher-hero-copy">
-            <p className="teacher-greeting">Good Afternoon, {profile.name || teacherName || "Teacher"}!</p>
+            <p className="teacher-greeting">Good Afternoon, {getDisplayName(profile, teacherName || "Teacher")}!</p>
             <h1>Manage your A/L class posts with ease.</h1>
             <p>
               Create class advertisements, submit them for approval, and connect with students looking for trusted A/L teachers.
@@ -357,11 +382,11 @@ function TeacherDashboard({ teacherName, onLogout }) {
                 <p className="teacher-label">Profile Summary</p>
                 <h2>Teacher Details</h2>
               </div>
-              <button className="teacher-small-btn" onClick={() => setActiveSection("profile")}>Edit</button>
+              <button className="teacher-small-btn" onClick={() => { setIsEditingProfile(false); setActiveSection("profile"); }}>View</button>
             </div>
 
             <div className="teacher-info-grid">
-              <div><span>Name</span><strong>{profile.name || "Not added"}</strong></div>
+              <div><span>Name</span><strong>{getDisplayName(profile, "Not added")}</strong></div>
               <div><span>Subject</span><strong>{profile.subject || "Not selected"}</strong></div>
               <div><span>Phone</span><strong>{profile.phone || "Not added"}</strong></div>
               <div><span>Teaching Mode</span><strong>{profile.teachingMode || "Not selected"}</strong></div>
@@ -504,18 +529,67 @@ function TeacherDashboard({ teacherName, onLogout }) {
   }
 
   function renderProfile() {
+    if (!isEditingProfile) {
+      return (
+        <section className="teacher-panel teacher-form-panel">
+          <div className="teacher-panel-header">
+            <div>
+              <p className="teacher-label">Account Details</p>
+              <h2>{getDisplayName(profile, teacherName || "Teacher")}</h2>
+              <p>View the teacher account details shown across your dashboard and class posts.</p>
+            </div>
+            <button
+              className="teacher-small-btn"
+              type="button"
+              onClick={() => {
+                setProfileForm(profile);
+                setIsEditingProfile(true);
+              }}
+            >
+              Edit
+            </button>
+          </div>
+
+          <div className="teacher-info-grid teacher-profile-details-grid">
+            <div><span>Title</span><strong>{profile.title || "-"}</strong></div>
+            <div><span>Full Name</span><strong>{profile.name || "-"}</strong></div>
+            <div><span>Email Address</span><strong>{profile.email || "-"}</strong></div>
+            <div><span>Phone</span><strong>{profile.phone || "-"}</strong></div>
+            <div><span>Main Subject</span><strong>{profile.subject || "-"}</strong></div>
+            <div><span>Teaching Mode</span><strong>{profile.teachingMode || "-"}</strong></div>
+            <div><span>Institute / Class Name</span><strong>{profile.institute || "-"}</strong></div>
+            <div><span>District</span><strong>{profile.district || "-"}</strong></div>
+            <div><span>Experience</span><strong>{profile.experience || "-"}</strong></div>
+            <div><span>Qualifications</span><strong>{profile.qualifications || "-"}</strong></div>
+            <div className="teacher-profile-detail-wide"><span>Bio</span><strong>{profile.bio || "-"}</strong></div>
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section className="teacher-panel teacher-form-panel">
         <div className="teacher-panel-header">
           <div>
             <p className="teacher-label">Account Details</p>
-            <h2>Teacher Profile</h2>
+            <h2>Edit Teacher Profile</h2>
             <p>Update your teacher details shown in the dashboard and class post area.</p>
           </div>
+          <button
+            className="teacher-small-btn muted"
+            type="button"
+            onClick={() => {
+              setProfileForm(profile);
+              setIsEditingProfile(false);
+            }}
+          >
+            Cancel
+          </button>
         </div>
 
         <form className="teacher-form" onSubmit={saveProfile}>
           <div className="teacher-form-grid teacher-form-grid-wide">
+            <label>Title *<select value={profileForm.title} onChange={(event) => handleProfileChange("title", event.target.value)} required><option value="">Choose title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Miss">Miss</option></select></label>
             <label>Full Name *<input type="text" value={profileForm.name} onChange={(event) => handleProfileChange("name", event.target.value)} /></label>
             <label>Email Address<input type="email" value={profileForm.email} disabled /></label>
             <label>Phone<input type="tel" value={profileForm.phone} onChange={(event) => handleProfileChange("phone", event.target.value)} placeholder="07XXXXXXXX" /></label>
@@ -554,7 +628,7 @@ function TeacherDashboard({ teacherName, onLogout }) {
 
         <nav className="teacher-nav">
           {menuItems.map((item) => (
-            <button key={item.id} className={activeSection === item.id ? "active" : ""} onClick={() => { if (item.id === "create") resetForm(); setActiveSection(item.id); }}>
+            <button key={item.id} className={activeSection === item.id ? "active" : ""} onClick={() => { if (item.id === "create") resetForm(); if (item.id === "profile") setIsEditingProfile(false); setActiveSection(item.id); }}>
               {item.label}
             </button>
           ))}
@@ -572,13 +646,13 @@ function TeacherDashboard({ teacherName, onLogout }) {
           <div className="teacher-profile-menu-wrap">
             <button className="teacher-profile-pill" onClick={() => setProfileMenuOpen((open) => !open)}>
               <span className="teacher-avatar">{getInitials(profile.name || teacherName)}</span>
-              <span><strong>{profile.name || teacherName || "Teacher"}</strong><small>{profile.subject || "Teacher"}</small></span>
+              <span><strong>{getDisplayName(profile, teacherName || "Teacher")}</strong><small>{profile.subject || "Teacher"}</small></span>
               <span className="teacher-profile-arrow">⌄</span>
             </button>
 
             {profileMenuOpen && (
               <div className="teacher-profile-dropdown">
-                <button onClick={() => { setActiveSection("profile"); setProfileMenuOpen(false); }}>View Profile</button>
+                <button onClick={() => { setIsEditingProfile(false); setActiveSection("profile"); setProfileMenuOpen(false); }}>View Profile</button>
                 <button className="logout-option" onClick={onLogout}>Logout</button>
               </div>
             )}
@@ -603,14 +677,14 @@ function TeacherDashboard({ teacherName, onLogout }) {
             <h4>Quick Links</h4>
             <button onClick={() => setActiveSection("dashboard")}>Home</button>
             <button onClick={() => setActiveSection("posts")}>Class Posts</button>
-            <button onClick={() => setActiveSection("profile")}>Profile</button>
+            <button onClick={() => { setIsEditingProfile(false); setActiveSection("profile"); }}>Profile</button>
           </div>
 
           <div className="teacher-footer-col">
             <h4>Teacher Tools</h4>
             <button onClick={() => { resetForm(); setActiveSection("create"); }}>Create Post</button>
             <button onClick={() => setActiveSection("posts")}>Approvals</button>
-            <button onClick={() => setActiveSection("profile")}>Account</button>
+            <button onClick={() => { setIsEditingProfile(false); setActiveSection("profile"); }}>Account</button>
           </div>
 
           <div className="teacher-footer-col">

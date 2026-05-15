@@ -25,7 +25,7 @@ router.get("/", auth, roleMiddleware(["student", "teacher", "admin"]), async (re
 });
 
 // Grades submitted answers and returns score summary.
-router.post("/submit", auth, roleMiddleware(["student", "teacher", "admin"]), async (req, res) => {
+router.post("/submit", auth, roleMiddleware("student"), async (req, res) => {
   try {
     const { lessonId, answers } = req.body;
     if (!lessonId) {

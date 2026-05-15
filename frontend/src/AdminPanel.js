@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import config from "./config";
 
 const API = `${config.API_BASE_URL}/admin`;
@@ -40,19 +40,15 @@ const emptyForms = {
   note: { title: "", description: "", fileUrl: "", pages: 0, fileSize: "", lessonId: "", subjectId: "", order: 0 },
   pastPaper: { title: "", paperType: "mcq", examYear: new Date().getFullYear(), fileUrl: "", section: "", questionsCount: 0, durationMinutes: 0, difficulty: "Medium", subjectId: "", lessonId: "" },
   question: { questionType: "mcq", lessonId: "", prompt: "", options: "", correctOptionIndex: 0, explanation: "", maxMarks: 1, examYear: new Date().getFullYear(), sourceLabel: "A/L Past Paper" },
-  user: { name: "", email: "", password: "", phone: "", role: "student", stream: "", subject: "" },
+  user: { title: "", name: "", email: "", password: "", phone: "", role: "student", stream: "", subject: "" },
 };
 
-function getToken() {
-  return localStorage.getItem("token") || "";
-}
-
-async function request(path, options = {}) {
+async function request(path, options = {}, token = "") {
   const response = await fetch(`${API}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
+      Authorization: `Bearer ${token}`,
       ...(options.headers || {}),
     },
   });
@@ -80,7 +76,101 @@ function toSubjectId(value) {
   return value?.subject?._id || value?.subject || value?.subjectId || "";
 }
 
-function AdminPanel({ adminName = "Admin", onLogout }) {
+function asArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function hasText(value) {
+  return String(value || "").trim().length > 0;
+}
+
+function resourceText(value) {
+  if (!value) return "";
+  if (typeof value === "object") {
+    return String(value.url || value.videoUrl || value.link || value.src || value.href || value.fileUrl || value.path || value.notesUrl || "").trim();
+  }
+  return String(value).trim();
+}
+
+function countLessonVideos(lesson) {
+  const urls = new Set();
+  const add = (value) => {
+    const text = resourceText(value);
+    if (hasText(text)) urls.add(text);
+  };
+
+  add(lesson.videoLink);
+  add(lesson.videoUrl);
+  asArray(lesson.videoLinks).forEach(add);
+  asArray(lesson.videoUrls).forEach(add);
+  asArray(lesson.videos).forEach((video) => {
+    if (typeof video === "string") add(video);
+    else add(video?.url || video?.videoUrl || video?.link || video?.src || video?.href);
+  });
+
+  return urls.size || lesson.videoCount || 0;
+}
+
+function countLessonNotes(lesson) {
+  const urls = new Set();
+  const add = (value) => {
+    const text = resourceText(value);
+    if (hasText(text)) urls.add(text);
+  };
+
+  add(lesson.notesUrl);
+  asArray(lesson.notes).forEach((note) => {
+    if (typeof note === "string") add(note);
+    else add(note?.fileUrl || note?.url || note?.path || note?.notesUrl || note?.href);
+  });
+
+  return urls.size || lesson.notesCount || 0;
+}
+
+function AdminField({ label, name, form, onChangeValue, type = "text", textarea = false, required = false }) {
+  const value = form[name] ?? "";
+
+  return (
+    <label className="admin-field">
+      <span>{label}</span>
+      {textarea ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChangeValue(name, event.target.value)}
+          required={required}
+        />
+      ) : (
+        <input
+          type={type}
+          value={type === "color" ? value || "#14b8a6" : value}
+          onChange={(event) => onChangeValue(name, event.target.value)}
+          required={required}
+        />
+      )}
+    </label>
+  );
+}
+
+function AdminSelectField({ label, name, form, onChangeValue, options = [], required = false }) {
+  return (
+    <label className="admin-field">
+      <span>{label}</span>
+      <select
+        value={form[name] ?? ""}
+        onChange={(event) => onChangeValue(name, event.target.value)}
+        required={required}
+      >
+        <option value="">Select</option>
+        {options.map(([value, labelText]) => (
+          <option value={value} key={`${name}-${value}`}>{labelText}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function AdminPanel({ adminName = "Admin", token = "", onLogout }) {
   const [active, setActive] = useState("dashboard");
   const [openGroups, setOpenGroups] = useState({ users: true, content: true, papers: true, posts: true });
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -100,21 +190,24 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
   const [modal, setModal] = useState({ open: false, type: "", mode: "add", item: null });
   const [form, setForm] = useState({});
 
-  const loadAll = async () => {
-    setLoading(true);
-    setMessage("");
+  const loadAll = useCallback(async (options = {}) => {
+    if (!options.silent) {
+      setLoading(true);
+      setMessage("");
+    }
     try {
+      if (!token) throw new Error("Admin session expired. Please login again.");
       const [dash, streamData, subjectData, lessonData, videoData, noteData, paperData, questionData, postData, userData] = await Promise.all([
-        request("/dashboard"),
-        request("/streams"),
-        request("/subjects"),
-        request("/lessons"),
-        request("/videos"),
-        request("/notes"),
-        request("/past-papers"),
-        request("/questions"),
-        request("/class-posts"),
-        request("/users"),
+        request("/dashboard", {}, token),
+        request("/streams", {}, token),
+        request("/subjects", {}, token),
+        request("/lessons", {}, token),
+        request("/videos", {}, token),
+        request("/notes", {}, token),
+        request("/past-papers", {}, token),
+        request("/questions", {}, token),
+        request("/class-posts", {}, token),
+        request("/users", {}, token),
       ]);
       setDashboard(dash);
       setStreams(streamData);
@@ -127,21 +220,36 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
       setPosts(postData);
       setUsers(userData);
     } catch (err) {
-      setMessage(err.message);
+      if (!options.silent) {
+        setMessage(err.message);
+      }
     } finally {
-      setLoading(false);
+      if (!options.silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [loadAll]);
 
-  const filtered = (items) => {
+  useEffect(() => {
+    const refreshAdminData = () => loadAll({ silent: true });
+    const intervalId = window.setInterval(refreshAdminData, 15000);
+
+    window.addEventListener("focus", refreshAdminData);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshAdminData);
+    };
+  }, [loadAll]);
+
+  const filtered = useCallback((items) => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter((item) => JSON.stringify(item).toLowerCase().includes(q));
-  };
+  }, [search]);
 
   const currentRows = useMemo(() => {
     if (active === "students") return filtered(users.filter((u) => u.role === "student"));
@@ -159,7 +267,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
     if (active === "rejectedPosts") return filtered(posts.filter((p) => p.status === "rejected"));
     if (active === "allPosts") return filtered(posts);
     return [];
-  }, [active, users, streams, subjects, lessons, videos, notes, pastPapers, questions, posts, search]);
+  }, [active, users, streams, subjects, lessons, videos, notes, pastPapers, questions, posts, filtered]);
 
   function toggleGroup(id) {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -216,7 +324,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
       await request(mode === "edit" ? `${endpoint}/${encodeURIComponent(itemId)}` : endpoint, {
         method: mode === "edit" ? "PUT" : "POST",
         body: JSON.stringify(body),
-      });
+      }, token);
       setMessage(`${mode === "edit" ? "Updated" : "Added"} successfully.`);
       closeModal();
       await loadAll();
@@ -239,7 +347,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
       post: "/class-posts",
     }[type];
     try {
-      await request(`${endpoint}/${encodeURIComponent(idOf(item))}`, { method: "DELETE" });
+      await request(`${endpoint}/${encodeURIComponent(idOf(item))}`, { method: "DELETE" }, token);
       setMessage("Deleted successfully.");
       await loadAll();
     } catch (err) {
@@ -250,7 +358,7 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
   async function reviewPost(post, status) {
     const rejectionReason = status === "rejected" ? window.prompt("Reason for rejection", "Please update the class post details.") || "" : "";
     try {
-      await request(`/class-posts/${idOf(post)}/review`, { method: "PUT", body: JSON.stringify({ status, rejectionReason }) });
+      await request(`/class-posts/${idOf(post)}/review`, { method: "PUT", body: JSON.stringify({ status, rejectionReason }) }, token);
       setMessage(`Class post ${status}.`);
       await loadAll();
     } catch (err) {
@@ -320,9 +428,9 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
     const key = idOf(item);
     const actions = (type) => <div className="admin-actions"><button onClick={() => openModal(type, "edit", item)}>Edit</button><button className="danger" onClick={() => removeItem(type, item)}>Delete</button></div>;
     if (["students", "teachers", "admins", "account"].includes(active)) return <tr key={key}><td>{item.name}</td><td>{item.email}</td><td><span className="admin-badge">{item.role}</span></td><td>{item.phone || "-"}</td><td>{actions("user")}</td></tr>;
-    if (active === "streams") return <tr key={key}><td>{item.icon} {item.name}</td><td>{item.sinhalaName || "-"}</td><td>{item.description || "-"}</td><td>{actions("stream")}</td></tr>;
-    if (active === "subjects") return <tr key={key}><td>{item.icon} {item.name}</td><td>{relationName(item, "stream")}</td><td>{item.code || "-"}</td><td>{actions("subject")}</td></tr>;
-    if (active === "lessons") return <tr key={key}><td>{item.title}</td><td>{relationName(item, "subject")}</td><td>{item.videoLink || item.videoUrl ? "Added" : (item.videos?.length || 0)}</td><td>{item.notesUrl ? "Added" : item.notesCount || 0}</td><td>{actions("lesson")}</td></tr>;
+    if (active === "streams") return <tr key={key}><td>{item.name}</td><td>{item.sinhalaName || "-"}</td><td>{item.description || "-"}</td><td>{actions("stream")}</td></tr>;
+    if (active === "subjects") return <tr key={key}><td>{item.name}</td><td>{relationName(item, "stream")}</td><td>{item.code || "-"}</td><td>{actions("subject")}</td></tr>;
+    if (active === "lessons") return <tr key={key}><td>{item.title}</td><td>{relationName(item, "subject")}</td><td>{countLessonVideos(item)}</td><td>{countLessonNotes(item)}</td><td>{actions("lesson")}</td></tr>;
     if (active === "videos") return <tr key={key}><td>{item.title}</td><td>{item.lessonTitle}</td><td className="admin-url-cell">{item.url || "-"}</td><td>{actions("video")}</td></tr>;
     if (active === "notes") return <tr key={key}><td>{item.title}</td><td>{relationName(item, "lesson")}</td><td className="admin-url-cell">{item.fileUrl || "-"}</td><td>{actions("note")}</td></tr>;
     if (active === "pastPapers") return <tr key={key}><td>{item.title}</td><td>{item.paperType}</td><td>{item.examYear}</td><td>{relationName(item, "subject")}</td><td>{actions("pastPaper")}</td></tr>;
@@ -332,14 +440,15 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
 
   function renderModalFields() {
     const type = modal.type;
-    if (type === "stream") return <><Field label="Stream name" name="name" required/><Field label="Sinhala name" name="sinhalaName"/><Field label="Description" name="description" textarea/><Field label="Code" name="code"/><Field label="Icon" name="icon"/><Field label="Color" name="color" type="color"/><Field label="Order" name="order" type="number"/></>;
-    if (type === "subject") return <><Field label="Subject name" name="name" required/><Field label="Sinhala name" name="sinhalaName"/><SelectField label="Stream" name="streamId" required options={streams.map(s => [idOf(s), s.name])}/><Field label="Code" name="code"/><Field label="Icon" name="icon"/><Field label="Color" name="color" type="color"/><Field label="Order" name="order" type="number"/></>;
-    if (type === "lesson") return <><Field label="Lesson title" name="title" required/><Field label="Sinhala title" name="sinhalaTitle"/><SelectField label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), `${s.name} (${relationName(s, "stream")})`])}/><Field label="Description" name="description" textarea/><Field label="Main video title" name="videoTitle"/><Field label="Main video URL" name="videoLink"/><Field label="Notes URL" name="notesUrl"/><Field label="MCQ paper URL" name="pastPaperMcqUrl"/><Field label="Structured paper URL" name="pastPaperStructuredUrl"/><Field label="Essay paper URL" name="pastPaperEssayUrl"/><Field label="Duration minutes" name="durationMinutes" type="number"/><Field label="Order" name="order" type="number"/></>;
-    if (type === "video") return <><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><Field label="Video title" name="title" required/><Field label="Video URL" name="url" required/><Field label="Duration" name="duration"/><Field label="Description" name="description" textarea/></>;
-    if (type === "note") return <><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><SelectField label="Subject" name="subjectId" options={subjects.map(s => [idOf(s), s.name])}/><Field label="Note title" name="title" required/><Field label="File URL" name="fileUrl"/><Field label="Description" name="description" textarea/><Field label="Pages" name="pages" type="number"/><Field label="File size" name="fileSize"/><Field label="Order" name="order" type="number"/></>;
-    if (type === "pastPaper") return <><Field label="Paper title" name="title" required/><SelectField label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), s.name])}/><SelectField label="Lesson" name="lessonId" options={[["", "No lesson"], ...lessons.map(l => [idOf(l), l.title])]}/><SelectField label="Paper type" name="paperType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"], ["full", "Full paper"]]}/><Field label="Exam year" name="examYear" type="number"/><Field label="File URL" name="fileUrl"/><Field label="Section" name="section"/><Field label="Questions count" name="questionsCount" type="number"/><Field label="Duration minutes" name="durationMinutes" type="number"/><SelectField label="Difficulty" name="difficulty" options={[["Easy", "Easy"], ["Medium", "Medium"], ["Hard", "Hard"]]}/></>;
-    if (type === "question") return <><SelectField label="Question type" name="questionType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"]]}/><SelectField label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><Field label="Question" name="prompt" required textarea/><Field label="Options (one per line for MCQ)" name="options" textarea/><Field label="Correct option index (0=A, 1=B, 2=C)" name="correctOptionIndex" type="number"/><Field label="Explanation" name="explanation" textarea/><Field label="Max marks" name="maxMarks" type="number"/><Field label="Exam year" name="examYear" type="number"/><Field label="Source label" name="sourceLabel"/></>;
-    if (type === "user") return <><Field label="Name" name="name" required/><Field label="Email" name="email" type="email" required/><Field label={modal.mode === "edit" ? "New password (optional)" : "Password"} name="password" type="password" required={modal.mode !== "edit"}/><Field label="Phone" name="phone"/><SelectField label="Role" name="role" options={[["student", "Student"], ["teacher", "Teacher"], ["admin", "Admin"]]}/><Field label="Stream" name="stream"/><Field label="Subject" name="subject"/></>;
+    const fieldProps = { form, onChangeValue: change };
+    if (type === "stream") return <><AdminField {...fieldProps} label="Stream name" name="name" required/><AdminField {...fieldProps} label="Sinhala name" name="sinhalaName"/><AdminField {...fieldProps} label="Description" name="description" textarea/><AdminField {...fieldProps} label="Code" name="code"/><AdminField {...fieldProps} label="Icon" name="icon"/><AdminField {...fieldProps} label="Color" name="color" type="color"/><AdminField {...fieldProps} label="Order" name="order" type="number"/></>;
+    if (type === "subject") return <><AdminField {...fieldProps} label="Subject name" name="name" required/><AdminField {...fieldProps} label="Sinhala name" name="sinhalaName"/><AdminSelectField {...fieldProps} label="Stream" name="streamId" required options={streams.map(s => [idOf(s), s.name])}/><AdminField {...fieldProps} label="Code" name="code"/><AdminField {...fieldProps} label="Icon" name="icon"/><AdminField {...fieldProps} label="Color" name="color" type="color"/><AdminField {...fieldProps} label="Order" name="order" type="number"/></>;
+    if (type === "lesson") return <><AdminField {...fieldProps} label="Lesson title" name="title" required/><AdminField {...fieldProps} label="Sinhala title" name="sinhalaTitle"/><AdminSelectField {...fieldProps} label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), `${s.name} (${relationName(s, "stream")})`])}/><AdminField {...fieldProps} label="Description" name="description" textarea/><AdminField {...fieldProps} label="Main video title" name="videoTitle"/><AdminField {...fieldProps} label="Main video URL" name="videoLink"/><AdminField {...fieldProps} label="Notes URL" name="notesUrl"/><AdminField {...fieldProps} label="MCQ paper URL" name="pastPaperMcqUrl"/><AdminField {...fieldProps} label="Structured paper URL" name="pastPaperStructuredUrl"/><AdminField {...fieldProps} label="Essay paper URL" name="pastPaperEssayUrl"/><AdminField {...fieldProps} label="Duration minutes" name="durationMinutes" type="number"/><AdminField {...fieldProps} label="Order" name="order" type="number"/></>;
+    if (type === "video") return <><AdminSelectField {...fieldProps} label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><AdminField {...fieldProps} label="Video title" name="title" required/><AdminField {...fieldProps} label="Video URL" name="url" required/><AdminField {...fieldProps} label="Duration" name="duration"/><AdminField {...fieldProps} label="Description" name="description" textarea/></>;
+    if (type === "note") return <><AdminSelectField {...fieldProps} label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><AdminSelectField {...fieldProps} label="Subject" name="subjectId" options={subjects.map(s => [idOf(s), s.name])}/><AdminField {...fieldProps} label="Note title" name="title" required/><AdminField {...fieldProps} label="File URL" name="fileUrl"/><AdminField {...fieldProps} label="Description" name="description" textarea/><AdminField {...fieldProps} label="Pages" name="pages" type="number"/><AdminField {...fieldProps} label="File size" name="fileSize"/><AdminField {...fieldProps} label="Order" name="order" type="number"/></>;
+    if (type === "pastPaper") return <><AdminField {...fieldProps} label="Paper title" name="title" required/><AdminSelectField {...fieldProps} label="Subject" name="subjectId" required options={subjects.map(s => [idOf(s), s.name])}/><AdminSelectField {...fieldProps} label="Lesson" name="lessonId" options={[["", "No lesson"], ...lessons.map(l => [idOf(l), l.title])]}/><AdminSelectField {...fieldProps} label="Paper type" name="paperType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"], ["full", "Full paper"]]}/><AdminField {...fieldProps} label="Exam year" name="examYear" type="number"/><AdminField {...fieldProps} label="File URL" name="fileUrl"/><AdminField {...fieldProps} label="Section" name="section"/><AdminField {...fieldProps} label="Questions count" name="questionsCount" type="number"/><AdminField {...fieldProps} label="Duration minutes" name="durationMinutes" type="number"/><AdminSelectField {...fieldProps} label="Difficulty" name="difficulty" options={[["Easy", "Easy"], ["Medium", "Medium"], ["Hard", "Hard"]]}/></>;
+    if (type === "question") return <><AdminSelectField {...fieldProps} label="Question type" name="questionType" options={[["mcq", "MCQ"], ["structured", "Structured"], ["essay", "Essay"]]}/><AdminSelectField {...fieldProps} label="Lesson" name="lessonId" required options={lessons.map(l => [idOf(l), l.title])}/><AdminField {...fieldProps} label="Question" name="prompt" required textarea/><AdminField {...fieldProps} label="Options (one per line for MCQ)" name="options" textarea/><AdminField {...fieldProps} label="Correct option index (0=A, 1=B, 2=C)" name="correctOptionIndex" type="number"/><AdminField {...fieldProps} label="Explanation" name="explanation" textarea/><AdminField {...fieldProps} label="Max marks" name="maxMarks" type="number"/><AdminField {...fieldProps} label="Exam year" name="examYear" type="number"/><AdminField {...fieldProps} label="Source label" name="sourceLabel"/></>;
+    if (type === "user") return <><AdminSelectField {...fieldProps} label="Title" name="title" options={[["", "No title"], ["Mr.", "Mr."], ["Mrs.", "Mrs."], ["Miss", "Miss"]]}/><AdminField {...fieldProps} label="Name" name="name" required/><AdminField {...fieldProps} label="Email" name="email" type="email" required/><AdminField {...fieldProps} label={modal.mode === "edit" ? "New password (optional)" : "Password"} name="password" type="password" required={modal.mode !== "edit"}/><AdminField {...fieldProps} label="Phone" name="phone"/><AdminSelectField {...fieldProps} label="Role" name="role" options={[["student", "Student"], ["teacher", "Teacher"], ["admin", "Admin"]]}/><AdminField {...fieldProps} label="Stream" name="stream"/><AdminField {...fieldProps} label="Subject" name="subject"/></>;
     if (type === "post") return modal.mode === "view" ? <div className="admin-post-view">
       <div className="admin-post-header">
         {modal.item?.image && <img src={modal.item.image} alt={modal.item.title} className="admin-post-image" />}
@@ -360,14 +469,6 @@ function AdminPanel({ adminName = "Admin", onLogout }) {
       </div>
     </div> : null;
     return null;
-  }
-
-  function Field({ label, name, type = "text", textarea = false, required = false }) {
-    return <label className="admin-field"><span>{label}</span>{textarea ? <textarea value={form[name] || ""} onChange={(e) => change(name, e.target.value)} required={required}/> : <input type={type} value={form[name] ?? ""} onChange={(e) => change(name, e.target.value)} required={required}/>}</label>;
-  }
-
-  function SelectField({ label, name, options = [], required = false }) {
-    return <label className="admin-field"><span>{label}</span><select value={form[name] ?? ""} onChange={(e) => change(name, e.target.value)} required={required}><option value="">Select</option>{options.map(([value, labelText]) => <option value={value} key={`${name}-${value}`}>{labelText}</option>)}</select></label>;
   }
 
   return <div className="admin-shell-v2">

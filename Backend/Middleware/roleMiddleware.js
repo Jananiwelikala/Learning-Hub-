@@ -10,8 +10,14 @@ function roleMiddleware(requiredRoles) {
       ? requiredRoles
       : [requiredRoles];
 
-    if (!rolesArray.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: "Access denied" });
+    const userRole = String(req.user.role || "").toLowerCase();
+    const allowedRoles = rolesArray.map((role) => String(role).toLowerCase());
+
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Please login with a ${allowedRoles.join(" or ")} account.`,
+      });
     }
 
     next();

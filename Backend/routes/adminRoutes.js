@@ -49,6 +49,126 @@ async function ensureLesson(lessonId) {
   return Lesson.findById(lessonId);
 }
 
+function resourceText(value) {
+  if (!value) return "";
+  if (typeof value === "object") {
+    return normalize(value.url || value.videoUrl || value.link || value.src || value.href || value.fileUrl || value.path || value.notesUrl || value.title || value.name);
+  }
+  return normalize(value);
+}
+
+function firstValue(...values) {
+  return values.map(resourceText).find(Boolean);
+}
+
+function normalizeResourceArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function collectLessonVideos(lesson) {
+  const videos = [];
+  const seen = new Set();
+  const addVideo = ({ id, title, url, description = "", duration = "", source }) => {
+    const normalizedUrl = resourceText(url);
+    if (!normalizedUrl || seen.has(`${source}:${normalizedUrl}`)) return;
+    seen.add(`${source}:${normalizedUrl}`);
+    videos.push({
+      id,
+      lessonId: lesson._id,
+      lessonTitle: lesson.title,
+      subject: lesson.subject,
+      title: normalize(title) || `Video ${videos.length + 1}`,
+      url: normalizedUrl,
+      description: normalize(description),
+      duration: normalize(duration),
+      source,
+    });
+  };
+
+  addVideo({
+    id: `${lesson._id}:main`,
+    title: lesson.videoTitle || `${lesson.title} video`,
+    url: firstValue(lesson.videoLink, lesson.videoUrl),
+    description: lesson.description,
+    source: "main",
+  });
+
+  normalizeResourceArray(lesson.videoLinks).forEach((url, index) => addVideo({
+    id: `${lesson._id}:videoLinks:${index}`,
+    title: `${lesson.title} video ${index + 1}`,
+    url,
+    source: "videoLinks",
+  }));
+
+  normalizeResourceArray(lesson.videoUrls).forEach((url, index) => addVideo({
+    id: `${lesson._id}:videoUrls:${index}`,
+    title: `${lesson.title} video ${index + 1}`,
+    url,
+    source: "videoUrls",
+  }));
+
+  normalizeResourceArray(lesson.videos).forEach((video, index) => {
+    const isObject = video && typeof video === "object";
+    addVideo({
+      id: `${lesson._id}:videos:${index}`,
+      title: isObject ? firstValue(video.title, video.name, video.label) : `${lesson.title} video ${index + 1}`,
+      url: isObject ? firstValue(video.url, video.videoUrl, video.link, video.src, video.href) : video,
+      description: isObject ? firstValue(video.description, video.summary) : "",
+      duration: isObject ? firstValue(video.duration, video.durationMinutes) : "",
+      source: "videos",
+    });
+  });
+
+  return videos;
+}
+
+function collectLessonNotes(lesson, existingNoteUrls = new Set()) {
+  const notes = [];
+  const seen = new Set(existingNoteUrls);
+  const addNote = ({ id, title, fileUrl, description = "", pages = 0, fileSize = "", source }) => {
+    const normalizedUrl = resourceText(fileUrl);
+    if (!normalizedUrl || seen.has(normalizedUrl)) return;
+    seen.add(normalizedUrl);
+    notes.push({
+      id,
+      _id: id,
+      title: normalize(title) || `Note ${notes.length + 1}`,
+      description: normalize(description),
+      fileUrl: normalizedUrl,
+      pages: normalizeNumber(pages),
+      fileSize: normalize(fileSize),
+      lesson: { _id: lesson._id, title: lesson.title },
+      subject: lesson.subject,
+      order: notes.length,
+      source,
+    });
+  };
+
+  normalizeResourceArray(lesson.notes).forEach((note, index) => {
+    const isObject = note && typeof note === "object";
+    addNote({
+      id: `lesson-note:${lesson._id}:${index}`,
+      title: isObject ? firstValue(note.title, note.name, note.label) : `${lesson.title} note ${index + 1}`,
+      fileUrl: isObject ? firstValue(note.fileUrl, note.url, note.path, note.notesUrl, note.href) : note,
+      description: isObject ? firstValue(note.description, note.summary) : "",
+      pages: isObject ? note.pages : 0,
+      fileSize: isObject ? note.fileSize : "",
+      source: "lesson.notes",
+    });
+  });
+
+  addNote({
+    id: `lesson-notesUrl:${lesson._id}`,
+    title: `${lesson.title} notes`,
+    fileUrl: lesson.notesUrl,
+    description: lesson.description,
+    source: "lesson.notesUrl",
+  });
+
+  return notes;
+}
+
 router.get("/dashboard", async (req, res) => {
   try {
     const [students, teachers, admins, streams, subjects, lessons, notes, pastPapers, questions, mcqs, pendingPosts, approvedPosts, rejectedPosts] = await Promise.all([
@@ -67,6 +187,8 @@ router.get("/dashboard", async (req, res) => {
       ClassPost.countDocuments({ status: "rejected" }),
     ]);
 
+    const allLessons = await Lesson.find().lean();
+
     res.json({
       students,
       teachers,
@@ -74,8 +196,8 @@ router.get("/dashboard", async (req, res) => {
       streams,
       subjects,
       lessons,
-      videos: await Lesson.aggregate([{ $project: { count: { $size: { $ifNull: ["$videos", []] } } } }, { $group: { _id: null, total: { $sum: "$count" } } }]).then((r) => r[0]?.total || 0),
-      notes,
+      videos: allLessons.reduce((total, lesson) => total + collectLessonVideos(lesson).length, 0),
+      notes: notes + allLessons.reduce((total, lesson) => total + collectLessonNotes(lesson).length, 0),
       pastPapers,
       questions: questions + mcqs,
       pendingPosts,
@@ -100,7 +222,7 @@ router.get("/users", async (req, res) => {
 
 router.post("/users", async (req, res) => {
   try {
-    const { name, email, password, role = "student", phone = "", streamId = null, stream = "", subject = "" } = req.body;
+    const { name, email, password, role = "student", phone = "", streamId = null, stream = "", subject = "", title = "" } = req.body;
     if (!normalize(name) || !normalize(email) || !normalize(password)) {
       return res.status(400).json({ message: "Name, email and password are required" });
     }
@@ -108,7 +230,18 @@ router.post("/users", async (req, res) => {
     const exists = await User.findOne({ email: normalize(email).toLowerCase() });
     if (exists) return res.status(400).json({ message: "Email already exists" });
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ name: normalize(name), email: normalize(email).toLowerCase(), password: hashedPassword, role, phone, streamId: streamId || null, stream, subject });
+    const normalizedTitle = ["Mr.", "Mrs.", "Miss"].includes(normalize(title)) ? normalize(title) : "";
+    const user = await User.create({
+      title: role === "teacher" ? normalizedTitle : "",
+      name: normalize(name),
+      email: normalize(email).toLowerCase(),
+      password: hashedPassword,
+      role,
+      phone,
+      streamId: streamId || null,
+      stream,
+      subject,
+    });
     res.status(201).json(normalizeId(user.toObject ? user.toObject() : user));
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -119,6 +252,12 @@ router.put("/users/:id", async (req, res) => {
   try {
     const updates = { ...req.body };
     delete updates.password;
+    if (Object.prototype.hasOwnProperty.call(updates, "title")) {
+      const normalizedTitle = normalize(updates.title);
+      updates.title = updates.role === "teacher" && ["Mr.", "Mrs.", "Miss"].includes(normalizedTitle)
+        ? normalizedTitle
+        : "";
+    }
     if (updates.email) updates.email = normalize(updates.email).toLowerCase();
     if (updates.role && !["student", "teacher", "admin"].includes(updates.role)) return res.status(400).json({ message: "Invalid role" });
     if (req.body.password) updates.password = await bcrypt.hash(req.body.password, 10);
@@ -277,15 +416,7 @@ router.delete("/lessons/:id", async (req, res) => {
 
 router.get("/videos", async (req, res) => {
   const lessons = await Lesson.find().populate("subject", "name").sort({ createdAt: -1 }).lean();
-  const videos = [];
-  lessons.forEach((lesson) => {
-    if (lesson.videoLink || lesson.videoUrl) {
-      videos.push({ id: `${lesson._id}:main`, lessonId: lesson._id, lessonTitle: lesson.title, subject: lesson.subject, title: lesson.videoTitle || lesson.title, url: lesson.videoLink || lesson.videoUrl, description: lesson.description || "", isMain: true });
-    }
-    (lesson.videos || []).forEach((video, index) => {
-      videos.push({ id: `${lesson._id}:${index}`, lessonId: lesson._id, lessonTitle: lesson.title, subject: lesson.subject, title: video.title || `Video ${index + 1}`, url: video.url || video.videoUrl || video.link || "", description: video.description || "", duration: video.duration || "" });
-    });
-  });
+  const videos = lessons.flatMap(collectLessonVideos);
   res.json(videos);
 });
 
@@ -295,7 +426,7 @@ router.post("/videos", async (req, res) => {
     if (!lesson) return res.status(400).json({ message: "Lesson is required" });
     lesson.videos = lesson.videos || [];
     lesson.videos.push({ title: normalize(req.body.title), url: normalize(req.body.url), description: normalize(req.body.description), duration: normalize(req.body.duration) });
-    lesson.videoCount = lesson.videos.length + (lesson.videoLink ? 1 : 0);
+    lesson.videoCount = collectLessonVideos(lesson.toObject()).length;
     await lesson.save();
     res.status(201).json({ message: "Video added", lesson });
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -303,19 +434,24 @@ router.post("/videos", async (req, res) => {
 
 router.put("/videos/:videoId", async (req, res) => {
   try {
-    const [lessonId, indexText] = req.params.videoId.split(":");
+    const [lessonId, source, indexText] = req.params.videoId.split(":");
     const lesson = await Lesson.findById(lessonId);
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
-    if (indexText === "main") {
+    if (source === "main") {
       lesson.videoTitle = normalize(req.body.title);
       lesson.videoLink = normalize(req.body.url);
       lesson.videoUrl = normalize(req.body.url);
       lesson.description = normalize(req.body.description) || lesson.description;
+    } else if (source === "videoLinks" || source === "videoUrls") {
+      const index = Number(indexText);
+      if (!Array.isArray(lesson[source]) || !lesson[source][index]) return res.status(404).json({ message: "Video not found" });
+      lesson[source][index] = normalize(req.body.url);
     } else {
       const index = Number(indexText);
       if (!lesson.videos?.[index]) return res.status(404).json({ message: "Video not found" });
       lesson.videos[index] = { ...lesson.videos[index], title: normalize(req.body.title), url: normalize(req.body.url), description: normalize(req.body.description), duration: normalize(req.body.duration) };
     }
+    lesson.videoCount = collectLessonVideos(lesson.toObject()).length;
     await lesson.save();
     res.json({ message: "Video updated", lesson });
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -323,18 +459,23 @@ router.put("/videos/:videoId", async (req, res) => {
 
 router.delete("/videos/:videoId", async (req, res) => {
   try {
-    const [lessonId, indexText] = req.params.videoId.split(":");
+    const [lessonId, source, indexText] = req.params.videoId.split(":");
     const lesson = await Lesson.findById(lessonId);
     if (!lesson) return res.status(404).json({ message: "Lesson not found" });
-    if (indexText === "main") {
+    if (source === "main") {
       lesson.videoTitle = "";
       lesson.videoLink = "";
       lesson.videoUrl = "";
+    } else if (source === "videoLinks" || source === "videoUrls") {
+      const index = Number(indexText);
+      if (!Array.isArray(lesson[source]) || !lesson[source][index]) return res.status(404).json({ message: "Video not found" });
+      lesson[source].splice(index, 1);
     } else {
       const index = Number(indexText);
+      if (!lesson.videos?.[index]) return res.status(404).json({ message: "Video not found" });
       lesson.videos.splice(index, 1);
     }
-    lesson.videoCount = (lesson.videos || []).length + (lesson.videoLink ? 1 : 0);
+    lesson.videoCount = collectLessonVideos(lesson.toObject()).length;
     await lesson.save();
     res.json({ message: "Video deleted" });
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -342,8 +483,12 @@ router.delete("/videos/:videoId", async (req, res) => {
 
 router.get("/notes", async (req, res) => {
   const filter = req.query.lessonId ? { lesson: req.query.lessonId } : {};
-  const items = await Note.find(filter).populate("lesson", "title").populate("subject", "name").sort({ order: 1, createdAt: -1 });
-  res.json(items);
+  const items = await Note.find(filter).populate("lesson", "title").populate("subject", "name").sort({ order: 1, createdAt: -1 }).lean();
+  const noteUrls = new Set(items.map((item) => normalize(item.fileUrl)).filter(Boolean));
+  const lessonFilter = req.query.lessonId ? { _id: req.query.lessonId } : {};
+  const lessons = await Lesson.find(lessonFilter).populate("subject", "name").sort({ createdAt: -1 }).lean();
+  const lessonNotes = lessons.flatMap((lesson) => collectLessonNotes(lesson, noteUrls));
+  res.json([...items, ...lessonNotes]);
 });
 
 router.post("/notes", async (req, res) => {
@@ -361,6 +506,34 @@ router.post("/notes", async (req, res) => {
 
 router.put("/notes/:id", async (req, res) => {
   try {
+    if (req.params.id.startsWith("lesson-note:")) {
+      const [, lessonId, indexText] = req.params.id.split(":");
+      const lesson = await Lesson.findById(lessonId);
+      if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+      const index = Number(indexText);
+      if (!lesson.notes?.[index]) return res.status(404).json({ message: "Note not found" });
+      lesson.notes[index] = {
+        ...(typeof lesson.notes[index] === "object" ? lesson.notes[index] : {}),
+        title: normalize(req.body.title),
+        fileUrl: normalize(req.body.fileUrl),
+        url: normalize(req.body.fileUrl),
+        description: normalize(req.body.description),
+        pages: normalizeNumber(req.body.pages),
+        fileSize: normalize(req.body.fileSize),
+      };
+      await lesson.save();
+      return res.json({ message: "Lesson note updated", lesson });
+    }
+
+    if (req.params.id.startsWith("lesson-notesUrl:")) {
+      const lessonId = req.params.id.split(":")[1];
+      const lesson = await Lesson.findById(lessonId);
+      if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+      lesson.notesUrl = normalize(req.body.fileUrl);
+      await lesson.save();
+      return res.json({ message: "Lesson notes URL updated", lesson });
+    }
+
     const updates = { ...req.body };
     if (updates.lessonId) { updates.lesson = updates.lessonId; delete updates.lessonId; }
     if (updates.subjectId) { updates.subject = updates.subjectId; delete updates.subjectId; }
@@ -371,6 +544,26 @@ router.put("/notes/:id", async (req, res) => {
 
 router.delete("/notes/:id", async (req, res) => {
   try {
+    if (req.params.id.startsWith("lesson-note:")) {
+      const [, lessonId, indexText] = req.params.id.split(":");
+      const lesson = await Lesson.findById(lessonId);
+      if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+      const index = Number(indexText);
+      if (!lesson.notes?.[index]) return res.status(404).json({ message: "Note not found" });
+      lesson.notes.splice(index, 1);
+      await lesson.save();
+      return res.json({ message: "Lesson note deleted" });
+    }
+
+    if (req.params.id.startsWith("lesson-notesUrl:")) {
+      const lessonId = req.params.id.split(":")[1];
+      const lesson = await Lesson.findById(lessonId);
+      if (!lesson) return res.status(404).json({ message: "Lesson not found" });
+      lesson.notesUrl = "";
+      await lesson.save();
+      return res.json({ message: "Lesson notes URL deleted" });
+    }
+
     const item = await Note.findByIdAndDelete(req.params.id);
     if (item) await Lesson.findByIdAndUpdate(item.lesson, { $inc: { notesCount: -1 } });
     res.json({ message: "Note deleted" });
@@ -476,10 +669,14 @@ router.put("/class-posts/:id/review", async (req, res) => {
     if (["approved", "rejected"].includes(status)) {
       post.approvedBy = req.user.id;
       post.approvedAt = new Date();
+    } else {
+      post.approvedBy = null;
+      post.approvedAt = null;
     }
     post.rejectionReason = status === "rejected" ? rejectionReason : "";
     await post.save();
     await post.populate("teacher", "name email phone");
+    await post.populate("approvedBy", "name");
     res.json(post);
   } catch (err) { res.status(400).json({ message: err.message }); }
 });

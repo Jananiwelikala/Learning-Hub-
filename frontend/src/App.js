@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import Login from "./Login";
 import Home from "./pages/landing/LandingPage";
@@ -10,19 +10,34 @@ import LessonDetail from "./LessonDetail";
 import RegisterRoleModal from "./RegisterRoleModal";
 import AdminPanel from "./AdminPanel";
 import TeacherDashboard from "./TeacherDashboard";
+import { getCurrentUserProfile } from "./api";
+
+const DASHBOARD_SCREENS = ["admin", "teacher", "dashboard"];
+
+function normalizeRole(role) {
+  return String(role || "").trim().toLowerCase();
+}
+
+function normalizeUser(user) {
+  if (!user) return null;
+  return { ...user, role: normalizeRole(user.role) };
+}
+
+function getDashboardScreen(role, token) {
+  if (!token) return "home";
+  if (role === "admin") return "admin";
+  if (role === "teacher") return "teacher";
+  if (role === "student") return "dashboard";
+  return "home";
+}
 
 function App() {
-  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-  const [token, setToken] = useState(localStorage.getItem("token"));
+  const storedUser = normalizeUser(JSON.parse(localStorage.getItem("user") || "null"));
+  const storedToken = localStorage.getItem("token");
+  const [token, setToken] = useState(storedToken);
   const [user, setUser] = useState(storedUser);
   const [screen, setScreen] = useState(
-    storedUser?.role === "admin"
-      ? "admin"
-      : storedUser?.role === "teacher"
-        ? "teacher"
-        : storedUser?.role === "student" && token
-          ? "dashboard"
-          : "home"
+    getDashboardScreen(storedUser?.role, storedToken)
   );
   const [selectedRole, setSelectedRole] = useState("student");
   const [selectedSubject, setSelectedSubject] = useState(null);
@@ -33,18 +48,13 @@ function App() {
       return;
     }
 
-    localStorage.setItem("token", loginResult.token);
-    localStorage.setItem("user", JSON.stringify(loginResult.user));
-    setToken(loginResult.token);
-    setUser(loginResult.user);
+    const normalizedUser = normalizeUser(loginResult.user);
 
-    if (loginResult.user.role === "admin") {
-      setScreen("admin");
-    } else if (loginResult.user.role === "teacher") {
-      setScreen("teacher");
-    } else {
-      setScreen("dashboard");
-    }
+    localStorage.setItem("token", loginResult.token);
+    localStorage.setItem("user", JSON.stringify(normalizedUser));
+    setToken(loginResult.token);
+    setUser(normalizedUser);
+    setScreen(getDashboardScreen(normalizedUser?.role, loginResult.token));
   }
 
   function handleLogout() {
@@ -55,20 +65,49 @@ function App() {
     setScreen("home");
   }
 
+  useEffect(() => {
+    if (!token) return undefined;
+
+    let isCancelled = false;
+
+    async function syncCurrentUser() {
+      const result = await getCurrentUserProfile(token);
+
+      if (isCancelled) return;
+
+      if (!result.success || !result.user) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setToken(null);
+        setUser(null);
+        setScreen("home");
+        return;
+      }
+
+      const verifiedUser = normalizeUser(result.user);
+      localStorage.setItem("user", JSON.stringify(verifiedUser));
+      setUser(verifiedUser);
+      setScreen((currentScreen) =>
+        DASHBOARD_SCREENS.includes(currentScreen)
+          ? getDashboardScreen(verifiedUser?.role, token)
+          : currentScreen
+      );
+    }
+
+    syncCurrentUser();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [token]);
+
   const isAdmin = user?.role === "admin";
   const isTeacher = user?.role === "teacher";
   const isStudent = user?.role === "student";
 
   function openRoleDashboard() {
-    if (user?.role === "admin") {
-      setScreen("admin");
-    } else if (user?.role === "teacher") {
-      setScreen("teacher");
-    } else if (user?.role === "student") {
-      setScreen("dashboard");
-    } else {
-      setScreen("login");
-    }
+    const dashboardScreen = getDashboardScreen(user?.role, token);
+    setScreen(dashboardScreen === "home" ? "login" : dashboardScreen);
   }
 
   return (
@@ -95,7 +134,7 @@ function App() {
           onSwitchLogin={() => setScreen("login")}
         />
       ) : screen === "admin" && isAdmin ? (
-        <AdminPanel adminName={user.name} onLogout={handleLogout} />
+        <AdminPanel adminName={user.name} token={token} onLogout={handleLogout} />
       ) : screen === "teacher" && isTeacher ? (
         <TeacherDashboard teacherName={user.name} onLogout={handleLogout} />
       ) : screen === "dashboard" && token && isStudent ? (

@@ -10,7 +10,8 @@ const SYSTEM_PROMPT = [
   "Give clear, short, exam-focused answers.",
   "Support Sinhala and English naturally based on the student's message.",
   "Focus on Physics, Chemistry, Biology, Maths, ICT, Commerce, Arts, and Technology subjects.",
-  "If the user is off-topic, politely redirect them to study-related questions.",
+  "Always check provided lesson material context first. If it is relevant, base the answer on it.",
+  "If the provided context is not related or not enough, still answer the student's question using your own correct knowledge.",
   "When useful, explain step by step in a concise way and include exam tips.",
 ].join(" ");
 
@@ -58,16 +59,17 @@ async function chatWithAssistant(req, res) {
     const resourceContext = buildResourceContext(resources);
     const contextualMessage = resourceContext
       ? [
-          "Use the following Biology lesson note context as the main source for the answer.",
-          "If the context is not enough, say what is missing briefly.",
+          "Check the following lesson material context first.",
+          "If it is relevant, use it as the main source for the answer.",
+          "If it is not related or not enough, answer generally using your own correct knowledge.",
           "",
           resourceContext,
           "",
           `Student question: ${message}`,
         ].join("\n")
       : [
-          "No matching Biology note context was found in lessonresources.",
-          "Answer generally and include this note: teacher confirmation may be needed.",
+          "No matching lesson material context was found.",
+          "Answer the student's question generally using your own correct knowledge.",
           "",
           `Student question: ${message}`,
         ].join("\n");

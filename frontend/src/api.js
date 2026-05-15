@@ -459,6 +459,29 @@ export async function getStudentSubjects(token) {
   }
 }
 
+export async function updateStudentProfile(token, profileData) {
+  try {
+    const response = await fetch(`${config.API_BASE_URL}/student/profile`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(profileData),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      return { success: true, profile: data.data };
+    }
+
+    return { success: false, error: data.message || 'Failed to update profile' };
+  } catch (error) {
+    return { success: false, error: 'Network error. Please check your connection.' };
+  }
+}
+
 export async function getStudentLessons(token, subjectId) {
   try {
     const response = await fetch(`${config.API_BASE_URL}/student/lessons/${subjectId}`, {
@@ -614,7 +637,7 @@ export async function sendStudentChatMessage(token, payload) {
       return { success: true, data: data.data };
     }
 
-    return { success: false, error: data.message || 'Failed to send chat message' };
+    return { success: false, status: response.status, error: data.message || 'Failed to send chat message' };
   } catch (error) {
     return { success: false, error: 'Network error. Please check your connection.' };
   }

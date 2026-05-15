@@ -80,11 +80,14 @@ app.get("/health", (req, res) => res.send("OK"));
 // Register a new user.
 app.post("/api/register", async (req, res) => {
   try {
-    const { name, email, phone, streamId, password, role } = req.body;
+    const { name, email, phone, streamId, password, role, title } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedName = String(name || "").trim();
     const normalizedPhone = String(phone || "").trim();
     const selectedRole = String(role || "student").trim().toLowerCase();
+    const normalizedTitle = ["Mr.", "Mrs.", "Miss"].includes(String(title || "").trim())
+      ? String(title || "").trim()
+      : "";
 
     if (!normalizedName || !normalizedEmail || !password) {
       return res.status(400).json({ message: "Name, email and password are required" });
@@ -110,6 +113,7 @@ app.post("/api/register", async (req, res) => {
 
     const createdUser = await User.create({
       name: normalizedName,
+      title: selectedRole === "teacher" ? normalizedTitle : "",
       email: normalizedEmail,
       phone: normalizedPhone,
       streamId: streamId || null,
@@ -128,6 +132,7 @@ app.post("/api/register", async (req, res) => {
       token,
       user: {
         id: createdUser._id,
+        title: createdUser.title || "",
         name: createdUser.name,
         email: createdUser.email,
         role: createdUser.role,
@@ -166,6 +171,7 @@ app.post("/api/login", async (req, res) => {
       token,
       user: {
         id: user._id,
+        title: user.title || "",
         name: user.name,
         email: user.email,
         role: user.role,
@@ -203,10 +209,13 @@ app.get("/api/student", auth, roleMiddleware("student"), (req, res) => {
 // Admin-only user management with explicit role assignment.
 app.post("/api/admin/users", auth, roleMiddleware("admin"), async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, title } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedName = String(name || "").trim();
     const selectedRole = String(role || "").trim().toLowerCase();
+    const normalizedTitle = ["Mr.", "Mrs.", "Miss"].includes(String(title || "").trim())
+      ? String(title || "").trim()
+      : "";
     const allowedRoles = ["student", "teacher", "admin"];
 
     if (!normalizedName || !normalizedEmail || !password || !selectedRole) {
@@ -227,6 +236,7 @@ app.post("/api/admin/users", auth, roleMiddleware("admin"), async (req, res) => 
     const hashedPassword = await bcrypt.hash(password, 10);
     const created = await User.create({
       name: normalizedName,
+      title: selectedRole === "teacher" ? normalizedTitle : "",
       email: normalizedEmail,
       password: hashedPassword,
       role: selectedRole,
@@ -234,7 +244,7 @@ app.post("/api/admin/users", auth, roleMiddleware("admin"), async (req, res) => 
 
     res.status(201).json({
       message: "User created successfully",
-      user: { id: created._id, name: created.name, email: created.email, role: created.role },
+      user: { id: created._id, title: created.title || "", name: created.name, email: created.email, role: created.role },
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

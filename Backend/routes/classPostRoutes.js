@@ -20,9 +20,11 @@ function buildClassPostPayload(body) {
     status = "pending",
     type,
     district,
+    image,
   } = body;
 
   const normalizedLocation = location || (type && district ? `${type} - ${district}` : district || "");
+  const normalizedStatus = ["draft", "pending"].includes(status) ? status : "pending";
 
   return {
     title,
@@ -34,7 +36,8 @@ function buildClassPostPayload(body) {
     duration,
     fee: Number(fee || 0),
     contactInfo,
-    status,
+    image: image || "",
+    status: normalizedStatus,
   };
 }
 

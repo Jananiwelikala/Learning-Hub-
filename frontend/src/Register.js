@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { register } from "./api";
+import { useEffect, useState } from "react";
+import { getStreams, register } from "./api";
 import "./App.css";
 
 function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
@@ -16,13 +16,35 @@ function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [stream, setStream] = useState("");
+  const [streamId, setStreamId] = useState("");
+  const [streams, setStreams] = useState([]);
   const [alYear, setAlYear] = useState("");
 
   const [subject, setSubject] = useState("");
   const [teachingMode, setTeachingMode] = useState("");
   const [institute, setInstitute] = useState("");
+  const [teacherTitle, setTeacherTitle] = useState("");
 
   const isTeacher = role === "teacher";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadStreams() {
+      const result = await getStreams();
+      if (isMounted && result.success) {
+        setStreams(result.streams || []);
+      }
+    }
+
+    if (!isTeacher) {
+      loadStreams();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isTeacher]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -59,11 +81,13 @@ function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
       };
 
       if (isTeacher) {
+        payload.title = teacherTitle;
         payload.subject = subject;
         payload.teachingMode = teachingMode;
         payload.institute = institute;
       } else {
         payload.stream = stream;
+        payload.streamId = streamId;
         payload.alYear = alYear;
       }
 
@@ -186,6 +210,21 @@ function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
 
               {isTeacher ? (
                 <>
+                  <label htmlFor="register-teacher-title">Title</label>
+                  <div className="auth-v2-input auth-v2-select">
+                    <select
+                      id="register-teacher-title"
+                      value={teacherTitle}
+                      onChange={(e) => setTeacherTitle(e.target.value)}
+                      required
+                    >
+                      <option value="">Choose title</option>
+                      <option value="Mr.">Mr.</option>
+                      <option value="Mrs.">Mrs.</option>
+                      <option value="Miss">Miss</option>
+                    </select>
+                  </div>
+
                   <div className="auth-v2-grid-2">
                     <div>
                       <label htmlFor="register-subject">Main Subject</label>
@@ -247,15 +286,20 @@ function Register({ role = "student", onLogin, onClose, onSwitchLogin }) {
                     <div className="auth-v2-input auth-v2-select">
                       <select
                         id="register-stream"
-                        value={stream}
-                        onChange={(e) => setStream(e.target.value)}
+                        value={streamId}
+                        onChange={(e) => {
+                          const selectedStream = streams.find((item) => String(item._id || item.id) === e.target.value);
+                          setStreamId(e.target.value);
+                          setStream(selectedStream?.name || "");
+                        }}
                         required
                       >
                         <option value="">Choose stream</option>
-                        <option value="Science">Science</option>
-                        <option value="Commerce">Commerce</option>
-                        <option value="Arts">Arts</option>
-                        <option value="Technology">Technology</option>
+                        {streams.map((item) => (
+                          <option key={item._id || item.id} value={item._id || item.id}>
+                            {item.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

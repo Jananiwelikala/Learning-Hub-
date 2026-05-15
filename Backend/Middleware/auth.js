@@ -1,7 +1,8 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 // Validates Bearer token and attaches decoded user payload to req.user.
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   try {
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ success: false, message: "JWT secret is not configured" });
@@ -17,9 +18,19 @@ function authMiddleware(req, res, next) {
 
     const token = parts[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select("name role email");
 
-    // decoded should contain { id, role, email } from the login token.
-    req.user = decoded;
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User account not found" });
+    }
+
+    req.user = {
+      ...decoded,
+      id: decoded.id,
+      name: user.name || decoded.name,
+      role: String(user.role || decoded.role || "").toLowerCase(),
+      email: user.email || decoded.email,
+    };
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: "Invalid token" });

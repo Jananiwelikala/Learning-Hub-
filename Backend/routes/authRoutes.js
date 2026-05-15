@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const auth = require("../Middleware/auth");
 
 const router = express.Router();
 const PUBLIC_REGISTER_ROLES = ["student", "teacher"];
@@ -22,10 +23,12 @@ function createAuthToken(user) {
 function toAuthUser(user) {
   return {
     id: user._id,
+    title: user.title || "",
     name: user.name,
     email: user.email,
     phone: user.phone || "",
     role: user.role,
+    streamId: user.streamId || null,
     stream: user.stream || "",
     alYear: user.alYear || "",
     subject: user.subject || "",
@@ -40,14 +43,17 @@ function toAuthUser(user) {
 
 function normalizeUserInput(body) {
   const role = String(body.role || "student").trim().toLowerCase();
+  const title = String(body.title || "").trim();
 
   return {
     name: String(body.name || "").trim(),
+    title: ["Mr.", "Mrs.", "Miss"].includes(title) ? title : "",
     email: String(body.email || "").trim().toLowerCase(),
     phone: String(body.phone || "").trim(),
     password: String(body.password || ""),
     role,
     stream: String(body.stream || body.streamId || "").trim(),
+    streamId: mongoose.Types.ObjectId.isValid(body.streamId) ? body.streamId : null,
     alYear: String(body.alYear || "").trim(),
     subject: String(body.subject || "").trim(),
     teachingMode: String(body.teachingMode || "").trim(),
@@ -99,10 +105,12 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(userInput.password, 10);
     const createdUser = await User.create({
       name: userInput.name,
+      title: userInput.role === "teacher" ? userInput.title : "",
       email: userInput.email,
       phone: userInput.phone,
       password: hashedPassword,
       role: userInput.role,
+      streamId: userInput.role === "student" ? userInput.streamId : null,
       stream: userInput.stream,
       alYear: userInput.alYear,
       subject: userInput.subject,
@@ -172,17 +180,9 @@ router.post("/login", async (req, res) => {
 });
 
 
-router.get("/me", async (req, res) => {
+router.get("/me", auth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const parts = authHeader.split(" ");
-
-    if (parts.length !== 2 || parts[0] !== "Bearer") {
-      return res.status(401).json({ success: false, message: "No token, access denied" });
-    }
-
-    const decoded = jwt.verify(parts[1], process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
+    const user = await User.findById(req.user.id).select("-password");
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -190,22 +190,15 @@ router.get("/me", async (req, res) => {
 
     return res.json({ success: true, user: toAuthUser(user) });
   } catch (error) {
-    return res.status(401).json({ success: false, message: "Invalid token" });
+    return res.status(500).json({ success: false, message: "Failed to load profile" });
   }
 });
 
-router.put("/me", async (req, res) => {
+router.put("/me", auth, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const parts = authHeader.split(" ");
-
-    if (parts.length !== 2 || parts[0] !== "Bearer") {
-      return res.status(401).json({ success: false, message: "No token, access denied" });
-    }
-
-    const decoded = jwt.verify(parts[1], process.env.JWT_SECRET);
     const allowedFields = [
       "name",
+      "title",
       "phone",
       "stream",
       "alYear",
@@ -225,7 +218,11 @@ router.put("/me", async (req, res) => {
       }
     });
 
-    const user = await User.findByIdAndUpdate(decoded.id, updates, {
+    if (Object.prototype.hasOwnProperty.call(updates, "title")) {
+      updates.title = ["Mr.", "Mrs.", "Miss"].includes(updates.title) ? updates.title : "";
+    }
+
+    const user = await User.findByIdAndUpdate(req.user.id, updates, {
       new: true,
       runValidators: true,
     }).select("-password");

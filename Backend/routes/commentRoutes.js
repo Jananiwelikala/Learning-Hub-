@@ -2,6 +2,7 @@ const express = require("express");
 const Comment = require("../models/Comment");
 const ClassPost = require("../models/ClassPost");
 const auth = require("../Middleware/auth");
+const roleMiddleware = require("../Middleware/roleMiddleware");
 
 const router = express.Router();
 
@@ -124,7 +125,7 @@ router.delete("/:id", auth, async (req, res) => {
 });
 
 // TEACHER: Get comments on their posts
-router.get("/my-posts", auth, async (req, res) => {
+router.get("/my-posts", auth, roleMiddleware("teacher"), async (req, res) => {
   try {
     // Find all posts by this teacher
     const teacherPosts = await ClassPost.find({
@@ -149,13 +150,8 @@ router.get("/my-posts", auth, async (req, res) => {
 });
 
 // ADMIN: Moderate comments
-router.put("/:id/moderate", auth, async (req, res) => {
+router.put("/:id/moderate", auth, roleMiddleware("admin"), async (req, res) => {
   try {
-    // Check if user is admin (we'll add roleMiddleware later if needed)
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
-
     const { status } = req.body;
     if (!["active", "hidden", "deleted"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });

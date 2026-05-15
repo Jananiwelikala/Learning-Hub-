@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { submitStructuredAnswer, submitStructuredAnswersBatch } from '../api';
 import '../styles/StructuredQuestion.css';
 

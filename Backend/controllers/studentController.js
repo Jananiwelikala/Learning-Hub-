@@ -141,6 +141,7 @@ function cleanUser(user) {
     role: user.role,
     stream: user.stream || "",
     streamId: user.streamId || null,
+    alYear: user.alYear || "",
     subject: user.subject || "",
     subjects: user.subjects || [],
     createdAt: user.createdAt,
@@ -229,6 +230,29 @@ function getPlatformHelpReply(message) {
   return "";
 }
 
+function getDirectGeneralStudyReply(message) {
+  const text = String(message || "").toLowerCase();
+  const asksNewtonSecondLaw =
+    (text.includes("newton") && text.includes("second")) ||
+    text.includes("f=ma") ||
+    text.includes("f = ma");
+
+  if (asksNewtonSecondLaw) {
+    return [
+      "Newton's second law says that the resultant force on an object equals its mass multiplied by its acceleration.",
+      "",
+      "**Formula:** F = ma",
+      "**F** = resultant force in newtons (N)",
+      "**m** = mass in kilograms (kg)",
+      "**a** = acceleration in metres per second squared (m s^-2)",
+      "",
+      "So, if the force increases, acceleration increases. If the mass increases, the same force gives a smaller acceleration.",
+    ].join("\n");
+  }
+
+  return "";
+}
+
 function getDirectUnit2Reply(message) {
   const text = String(message || "").toLowerCase();
   if (text.includes("atp") && (text.includes("full form") || text.includes("stands for"))) {
@@ -236,6 +260,47 @@ function getDirectUnit2Reply(message) {
   }
 
   return "";
+}
+
+function isLikelyNonBiologyQuestion(message) {
+  const text = String(message || "").toLowerCase();
+  return includesAny(text, [
+    "newton",
+    "force",
+    "motion",
+    "acceleration",
+    "velocity",
+    "momentum",
+    "f=ma",
+    "f = ma",
+    "physics",
+    "gravity",
+    "electricity",
+    "current",
+    "voltage",
+  ]);
+}
+
+function resourcesMatchQuestion(message, resources = []) {
+  if (!resources.length) return false;
+  if (isLikelyNonBiologyQuestion(message)) return false;
+
+  const text = String(message || "").toLowerCase();
+  const resourceText = resources
+    .map((resource) => [
+      resource.title,
+      resource.sinhalaTitle,
+      ...(resource.keywords || []),
+    ].filter(Boolean).join(" "))
+    .join(" ")
+    .toLowerCase();
+
+  const meaningfulWords = text
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 3 && !["what", "how", "why", "explain", "about", "please"].includes(word));
+
+  return meaningfulWords.some((word) => resourceText.includes(word));
 }
 
 function getRecentChatContext(req, currentMessage) {
@@ -409,14 +474,13 @@ async function answerFromCleanResources(message, resources = []) {
   if (!context) return "";
 
   const prompt = [
-    "You are a Sinhala medium Sri Lankan A/L Biology tutor.",
-    "Use the given Biology context when it is relevant.",
-    "If the context is not enough to answer the student's understanding question, use your own correct A/L Biology knowledge.",
+    "You are Learning Hub AI Assistant for Sri Lankan A/L students.",
+    "First check the given lesson material context and use it when it is relevant to the student's question.",
+    "If the context is not related or not enough, answer using your own correct study knowledge instead of refusing.",
     "Answer in Sinhala if the student asks Sinhala. Keep only unavoidable abbreviations such as ATP, ADP, Pi, DNA, RNA and pH.",
     "Do not simply repeat the context. Answer the exact question the student asked.",
     "For understanding questions, explain the cause-process-result clearly.",
     "Give 3-5 clear exam-focused Sinhala points. Do not give only a definition.",
-    "If the question is not Biology, say you can help with A/L Biology and platform questions.",
     "Do not stop mid-sentence.",
     "",
     context,
@@ -453,13 +517,12 @@ async function answerFromGeneralBiology(message) {
   if (!process.env.GEMINI_API_KEY) return "";
 
   const prompt = [
-    "You are a Sinhala medium Sri Lankan A/L Biology tutor.",
-    "Answer using your own correct A/L Biology knowledge.",
-    "Answer in Sinhala. Keep only unavoidable abbreviations such as ATP, ADP, Pi, DNA, RNA and pH.",
-    "For understanding questions, explain the reason and process clearly.",
-    "Give 3-5 clear exam-focused points. Do not give only a definition.",
-    "Do not mix long English phrases into the Sinhala answer.",
-    "If the question is not Biology, say you can help with A/L Biology and platform questions.",
+    "You are Learning Hub AI Assistant for Sri Lankan A/L students.",
+    "The lesson material search did not find a clearly relevant answer, so answer from your own correct knowledge.",
+    "Answer the student's actual question. Do not refuse only because it is outside the current lesson.",
+    "Support Sinhala and English naturally based on the student's message.",
+    "For study questions, give clear A/L exam-focused points and examples where useful.",
+    "For non-study questions, still be helpful, concise, and safe.",
     "",
     `Student question: ${message}`,
   ].join("\n");
@@ -900,7 +963,7 @@ async function getProfile(req, res) {
 
 async function updateProfile(req, res) {
   try {
-    const allowed = ["name", "phone", "stream", "streamId", "subject", "subjects"];
+    const allowed = ["name", "email", "phone", "stream", "streamId", "alYear", "subject", "subjects"];
     const updates = {};
 
     allowed.forEach((key) => {
@@ -908,8 +971,10 @@ async function updateProfile(req, res) {
     });
 
     if (updates.name !== undefined) updates.name = String(updates.name).trim();
+    if (updates.email !== undefined) updates.email = String(updates.email).trim().toLowerCase();
     if (updates.phone !== undefined) updates.phone = String(updates.phone).trim();
     if (updates.stream !== undefined) updates.stream = String(updates.stream).trim();
+    if (updates.alYear !== undefined) updates.alYear = String(updates.alYear).trim();
     if (updates.subject !== undefined) updates.subject = String(updates.subject).trim();
     if (updates.streamId && !isObjectId(updates.streamId)) {
       return fail(res, 400, "Invalid stream id");
@@ -1999,53 +2064,51 @@ async function postChatMessage(req, res) {
     let pdfAssistantText =
       getDirectUnit2Reply(message) ||
       getPlatformHelpReply(message) ||
+      getDirectGeneralStudyReply(message) ||
       getFollowUpDirectReply(message, chatContext.explicitHistory);
 
     if (!pdfAssistantText) {
-      if (!isBiologyQuestion(resolvedMessage)) {
-        pdfAssistantText = STUDY_ASSISTANT_ONLY_REPLY;
-      } else {
-        const cleanResources = await findRelevantLessonResources(resolvedMessage, {
-          lessonId: userMessage.lesson,
-          subjectId: userMessage.subject,
-        });
-        const hasCleanSummary = cleanResources.some((resource) => resource.type === "clean-summary");
-        const cleanAnswer =
-          getFunctionIntentReply(resolvedMessage, cleanResources) ||
-          (await answerFromCleanResources(resolvedMessage, cleanResources));
+      const cleanResources = await findRelevantLessonResources(resolvedMessage, {
+        lessonId: userMessage.lesson,
+        subjectId: userMessage.subject,
+      });
+      const relevantCleanResources = resourcesMatchQuestion(resolvedMessage, cleanResources)
+        ? cleanResources
+        : [];
+      const hasCleanSummary = relevantCleanResources.some((resource) => resource.type === "clean-summary");
+      const cleanAnswer =
+        getFunctionIntentReply(resolvedMessage, relevantCleanResources) ||
+        (await answerFromCleanResources(resolvedMessage, relevantCleanResources));
 
-        if (cleanAnswer && !isWeakPdfAnswer(cleanAnswer)) {
-          pdfAssistantText = cleanAnswer;
-          pdfResources = cleanResources;
-        } else if (hasCleanSummary) {
-          pdfAssistantText = await answerFromGeneralBiology(resolvedMessage);
-          if (!pdfAssistantText || isWeakPdfAnswer(pdfAssistantText)) {
-            pdfAssistantText = buildNoteBasedReply(cleanResources);
-          }
-          pdfResources = cleanResources;
+      if (cleanAnswer && !isWeakPdfAnswer(cleanAnswer)) {
+        pdfAssistantText = cleanAnswer;
+        pdfResources = relevantCleanResources;
+      } else if (hasCleanSummary) {
+        pdfAssistantText = await answerFromGeneralBiology(resolvedMessage);
+        if (!pdfAssistantText || isWeakPdfAnswer(pdfAssistantText)) {
+          pdfAssistantText = buildNoteBasedReply(relevantCleanResources);
         }
+        pdfResources = relevantCleanResources;
       }
     }
 
     if (!pdfAssistantText) {
-      if (!isBiologyQuestion(resolvedMessage)) {
-        pdfAssistantText = STUDY_ASSISTANT_ONLY_REPLY;
+      pdfResources = await findRelevantLessonResources(resolvedMessage, {
+        lessonId: userMessage.lesson,
+        subjectId: userMessage.subject,
+      });
+      if (resourcesMatchQuestion(resolvedMessage, pdfResources)) {
+        pdfAssistantText =
+          getFunctionIntentReply(resolvedMessage, pdfResources) ||
+          (await answerFromCleanResources(resolvedMessage, pdfResources)) ||
+          buildNoteBasedReply(pdfResources);
       } else {
-        pdfResources = await findRelevantLessonResources(resolvedMessage, {
-          lessonId: userMessage.lesson,
-          subjectId: userMessage.subject,
-        });
-        if (pdfResources.length) {
-          pdfAssistantText =
-            getFunctionIntentReply(resolvedMessage, pdfResources) ||
-            (await answerFromGeneralBiology(resolvedMessage)) ||
-            buildNoteBasedReply(pdfResources);
-        } else {
-          pdfAssistantText =
-            getDirectUnit2Reply(message) ||
-            (await answerFromGeneralBiology(resolvedMessage)) ||
-            LESSON_2_ONLY_REPLY;
-        }
+        pdfResources = [];
+        pdfAssistantText =
+          getDirectUnit2Reply(message) ||
+          getDirectGeneralStudyReply(message) ||
+          (await answerFromGeneralBiology(resolvedMessage)) ||
+          "I could not find this in the lesson materials, and the AI answer service is not configured right now. Please try again later.";
       }
     }
 
