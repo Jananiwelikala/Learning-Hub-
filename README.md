@@ -1,218 +1,228 @@
-# Learning Hub - Production Ready Web Application
+# Learning Hub
 
-A comprehensive multi-role web application for connecting teachers and students in Sri Lanka's education system.
+Learning Hub is a full-stack A/L learning platform built for Sri Lankan students, teachers, and administrators. It brings together stream-based learning content, class discovery, past paper practice, teacher class post approvals, and an AI study chat in one role-based web application.
 
-## 🚀 Features
+## Project Status
 
-- **Multi-Role Authentication**: Student, Teacher, and Admin roles
-- **Class Discovery**: Students can browse approved teacher posts
-- **Teacher Dashboard**: Create and manage class advertisements
-- **Admin Panel**: Approve/reject teacher posts and manage users
-- **Real-time Communication**: Comment system for student-teacher interaction
-- **Responsive Design**: Mobile-first approach with modern UI
-- **Production Ready**: Configured for Vercel + Render + MongoDB Atlas deployment
+Completed final-year individual project.
 
-## 🛠️ Tech Stack
+The application includes:
 
-### Frontend
-- **React.js** (v19.2.4) - Modern React with hooks
-- **CSS Modules** - Scoped styling
-- **Responsive Design** - Mobile-first approach
+- Student dashboard
+- Teacher dashboard
+- Admin panel
+- Role-based authentication and access control
+- Real MongoDB-backed learning content management
+- AI study assistant with lesson-material awareness
+- Class post approval workflow
+- Stream, subject, lesson, note, video, and past paper management
 
-### Backend
-- **Node.js + Express** - RESTful API
-- **MongoDB + Mongoose** - Database and ODM
-- **JWT Authentication** - Secure token-based auth
-- **bcrypt** - Password hashing
+## Tech Stack
 
-### Deployment
-- **Vercel** - Frontend hosting
-- **Render** - Backend hosting
-- **MongoDB Atlas** - Cloud database
+Frontend:
 
-## 📋 Prerequisites
+- React
+- React Scripts
+- CSS / CSS Modules
 
-- Node.js (v16 or higher)
-- MongoDB Atlas account
-- Vercel account
-- Render account
+Backend:
 
-## 🚀 Quick Start (Development)
+- Node.js
+- Express
+- MongoDB
+- Mongoose
+- JWT authentication
+- bcrypt password hashing
+- Gemini API integration for AI assistance
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd learning-hub
-   ```
+Database:
 
-2. **Backend Setup**
-   ```bash
-   cd Backend
-   npm install
-   cp .env.example .env
-   # Edit .env with your MongoDB connection string
-   npm run dev
-   ```
+- MongoDB / MongoDB Atlas
 
-3. **Frontend Setup**
-   ```bash
-   cd ../frontend
-   npm install
-   cp .env.example .env
-   # Edit .env with backend URL
-   npm start
-   ```
+## Main Features
 
-## 🌐 Production Deployment
+### Student
 
-### 1. MongoDB Atlas Setup
-1. Create a MongoDB Atlas cluster
-2. Get your connection string
-3. Create database user with read/write permissions
+- Register and login as a student
+- Select A/L stream and exam year
+- Dashboard customized by student stream and A/L year
+- A/L countdown based on August of the selected exam year
+- View stream subjects and lessons
+- Access lesson videos, notes, MCQs, structured questions, and past papers
+- Browse approved teacher class posts
+- Use AI study chat for lesson-related and general study questions
+- Update profile details and selected stream
 
-### 2. Backend Deployment (Render)
-1. Connect your GitHub repository to Render
-2. Use `render.yaml` configuration
-3. Set environment variables:
-   - `MONGODB_URI`: Your MongoDB Atlas connection string
-   - `JWT_SECRET`: Generate a secure random string
-   - `NODE_ENV`: production
-   - `FRONTEND_URL`: Your Vercel app URL
+### Teacher
 
-### 3. Frontend Deployment (Vercel)
-1. Connect your GitHub repository to Vercel
-2. Use `vercel.json` configuration
-3. Set environment variable:
-   - `REACT_APP_API_BASE_URL`: Your Render backend URL + /api
+- Register and login as a teacher
+- Select title: Mr., Mrs., or Miss
+- View and edit teacher account/profile details
+- Create class posts
+- Submit class posts for admin approval
+- See approval status after admin review
 
-### 4. Environment Variables
+### Admin
 
-#### Backend (.env)
+- Manage students, teachers, and admins
+- Manage real streams, subjects, lessons, lesson videos, notes, past papers, and questions
+- Add new streams that appear in student registration and profile dropdowns
+- Review teacher class posts
+- Approve, reject, or delete class posts
+- View dashboard counts and system content
+
+## Folder Structure
+
+```text
+Learning Hub/
+  Backend/
+    controllers/
+    Middleware/
+    models/
+    routes/
+    utils/
+    server.js
+    package.json
+
+  frontend/
+    public/
+    src/
+    package.json
+
+  README.md
+```
+
+## Environment Variables
+
+Create environment files from the examples before running the project.
+
+### Backend `.env`
+
 ```env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/learning_hub
-JWT_SECRET=your_super_secret_jwt_key_here
+MONGO_URI=mongodb://localhost:27017/learning_hub
+JWT_SECRET=replace_with_a_secure_secret
 PORT=5000
-NODE_ENV=production
-FRONTEND_URL=https://your-app.vercel.app
+FRONTEND_URL=http://localhost:3000
+GEMINI_API_KEY=optional_google_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-#### Frontend (.env)
+`GEMINI_API_KEY` is optional. Without it, AI features that require external generation may return fallback responses.
+
+### Frontend `.env`
+
 ```env
-REACT_APP_API_BASE_URL=https://your-backend.onrender.com/api
+REACT_APP_API_BASE_URL=http://localhost:5000/api
 ```
-
-## 📱 Features Overview
-
-### Student Dashboard
-- Browse approved class posts by subject
-- Advanced search and filtering
-- Contact teachers directly
-- Responsive mobile experience
-
-### Teacher Dashboard
-- Create detailed class advertisements
-- Manage post status (Draft → Pending → Approved)
-- Track student interactions
-- Professional post management interface
-
-### Admin Panel
-- Approve/reject teacher posts
-- User management
-- System oversight
-- Bulk operations support
-
-## 🔧 API Endpoints
-
-### Authentication
-- `POST /api/login` - User login
-- `POST /api/register` - User registration
-
-### Class Posts
-- `GET /api/class-posts/my-posts` - Teacher's posts
-- `POST /api/class-posts` - Create post
-- `PUT /api/class-posts/:id` - Update post
-- `DELETE /api/class-posts/:id` - Delete post
-- `POST /api/class-posts/:id/submit` - Submit for approval
-- `GET /api/class-posts/approved` - Public approved posts
-
-### Comments
-- `GET /api/comments/post/:postId` - Get post comments
-- `POST /api/comments` - Create comment
-- `PUT /api/comments/:id` - Update comment
-- `DELETE /api/comments/:id` - Delete comment
-
-## 🎨 UI/UX Improvements
-
-- **Loading States**: Spinners and skeleton screens
-- **Error Handling**: User-friendly error messages
-- **Empty States**: Helpful guidance when no data
-- **Responsive Design**: Optimized for all screen sizes
-- **Accessibility**: Proper ARIA labels and keyboard navigation
-
-## 🔒 Security Features
-
-- JWT token authentication
-- Password hashing with bcrypt
-- CORS configuration
-- Input validation and sanitization
-- Role-based access control
-
-## 📈 Performance Optimizations
-
-- Code splitting and lazy loading
-- Optimized bundle sizes
-- Efficient database queries
-- CDN-ready static assets
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 📞 Support
-
-For support or questions, please open an issue in the repository.
-
----
-
-**Built with ❤️ for Sri Lankan education community**
-- `/api/streams`, `/api/subjects`
-- `/api/lessons`
-- `/api/mcqs`
-- `/api/assessments`
 
 ## Run Locally
 
-### Backend
+### 1. Backend
 
-1. Go to `Backend`
-2. Install dependencies:
-   - `npm install`
-3. Configure `.env` with:
-   - `MONGO_URI`
-   - `JWT_SECRET`
-   - `PORT` (optional)
-4. Start server:
-   - `npm run dev`
+```bash
+cd Backend
+npm install
+npm run dev
+```
 
-### Frontend
+Backend runs on:
 
-1. Go to `frontend`
-2. Install dependencies:
-   - `npm install`
-3. Configure `.env`:
-   - `REACT_APP_API_BASE_URL=http://localhost:5000`
-4. Start frontend:
-   - `npm start`
+```text
+http://localhost:5000
+```
+
+### 2. Frontend
+
+Open a second terminal:
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Frontend runs on:
+
+```text
+http://localhost:3000
+```
+
+## Useful Scripts
+
+Backend:
+
+```bash
+npm start
+npm run dev
+npm run seed:biology-unit2-clean
+npm run ingest:biology-notes
+npm run cleanup:legacy-lessons
+```
+
+Frontend:
+
+```bash
+npm start
+npm run build
+npm test
+```
+
+## Core API Areas
+
+Authentication:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `PUT /api/auth/me`
+
+Student:
+
+- `GET /api/student/dashboard`
+- `GET /api/student/subjects`
+- `GET /api/student/lessons/:subjectId`
+- `GET /api/student/lesson/:lessonId`
+- `POST /api/student/chatbot/message`
+
+Teacher class posts:
+
+- `GET /api/class-posts/my-posts`
+- `POST /api/class-posts`
+- `PUT /api/class-posts/:id`
+- `POST /api/class-posts/:id/submit`
+
+Admin:
+
+- `GET /api/admin/dashboard`
+- `GET /api/admin/users`
+- `GET /api/admin/streams`
+- `GET /api/admin/subjects`
+- `GET /api/admin/lessons`
+- `GET /api/admin/class-posts`
+
+Public:
+
+- `GET /api/streams`
+- `GET /api/subjects`
+- `GET /api/class-posts/approved`
+
+## Role-Based Access
+
+The backend uses JWT authentication and role middleware.
+
+- Student-only routes are protected with the `student` role.
+- Teacher-only routes are protected with the `teacher` role.
+- Admin-only routes are protected with the `admin` role.
+- The auth middleware verifies the current user from MongoDB before authorizing protected requests.
 
 ## Notes
 
-- Sample data seeding runs when backend starts.
-- Admin-only operations are protected using JWT + role middleware.
+- Streams and subjects are stored in MongoDB and managed from the admin panel.
+- Student registration and profile stream dropdowns use the real stream records from the backend.
+- Teacher class posts only become visible to students after admin approval.
+- Student dashboard exam countdown uses August 1 of the selected A/L year.
+
+## Author
+
+Learning Hub A/L Platform  
+Final-year individual project
